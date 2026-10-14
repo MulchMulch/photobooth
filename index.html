@@ -54,6 +54,10 @@
     object-fit: cover; background: #000;
   }
   #video.mirror { transform: scaleX(-1); }
+  #freeze {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; background: #000;
+  }
 
   #countdown {
     position: absolute; inset: 0;
@@ -146,6 +150,7 @@
   <div id="booth" style="display:contents">
     <div id="stage">
       <video id="video" autoplay playsinline muted></video>
+      <img id="freeze" class="hidden" alt="">
       <div id="countdown"></div>
       <div id="flash"></div>
       <div id="status" class="hidden"></div>
@@ -177,8 +182,8 @@
 (() => {
   // ---------- Settings ----------
   const SHOTS        = 4;      // pictures per session
-  const COUNT_FROM   = 3;      // seconds in the countdown
-  const PAUSE_MS     = 900;    // pause between pictures
+  const COUNT_FROM   = 5;      // seconds in the countdown
+  const REVIEW_MS    = 3000;   // how long each new photo stays frozen on screen
 
   // Print geometry at 300 DPI. Paper 4x6in => 1200x1800 px; two 2x6in strips side by side.
   const DPI = 300;
@@ -195,8 +200,9 @@
   const countdownEl = $('countdown'), flashEl = $('flash'), statusEl = $('status'), messageEl = $('message');
   const shotDots = [...document.querySelectorAll('#shots i')];
   const booth = $('booth'), result = $('result');
-  const resultImg = $('resultImg'), printImg = $('printImg');
+  const resultImg = $('resultImg'), printImg = $('printImg'), freezeEl = $('freeze');
 
+  let pdfFile = null, pdfUrl = null;
   let stream = null, facing = 'user', busy = false, finalBlob = null, finalUrl = null;
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -279,13 +285,16 @@
     for (let i = 0; i < SHOTS; i++) {
       statusEl.textContent = 'Photo ' + (i + 1) + ' of ' + SHOTS;
       await countdown(COUNT_FROM);
-      photos.push(grabFrame());
+      const frame = grabFrame();
+      photos.push(frame);
+      freezeEl.src = frame.toDataURL('image/jpeg', 0.9);
+      freezeEl.classList.remove('hidden');   // freeze on the photo just taken
       flash();
       shotDots[i].classList.add('done');
-      if (i < SHOTS - 1) await sleep(PAUSE_MS);
+      await sleep(REVIEW_MS);
+      freezeEl.classList.add('hidden');
     }
     statusEl.classList.add('hidden');
-    await sleep(500);
     await buildSheet(photos);
     busy = false; flipBtn.disabled = false;
   }
@@ -323,12 +332,52 @@
     printImg.src = finalUrl;
     $('downloadLink').href = finalUrl;
 
+    pdfFile = new File([await makePdf(finalBlob)], 'photobooth-4x6.pdf', { type: 'application/pdf' });
+    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    pdfUrl = URL.createObjectURL(pdfFile);
+
     booth.classList.add('hidden');
     result.classList.remove('hidden');
   }
 
+  // Wrap the sheet JPEG in a one-page PDF whose page is exactly 4x6 in (288x432 pt),
+  // image full-bleed. iOS prints PDFs at their true page size, with no URL/date footer.
+  async function makePdf(jpegBlob) {
+    const jpg = new Uint8Array(await jpegBlob.arrayBuffer());
+    const enc = new TextEncoder();
+    const chunks = [], offsets = [];
+    let len = 0;
+    const push = d => { const b = typeof d === 'string' ? enc.encode(d) : d; chunks.push(b); len += b.length; };
+    const obj = (n, body) => { offsets[n] = len; push(n + ' 0 obj\n' + body + '\nendobj\n'); };
+
+    push('%PDF-1.4\n');
+    obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+    obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+    obj(3, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>');
+    offsets[4] = len;
+    push('4 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + SHEET_W + ' /Height ' + SHEET_H +
+         ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpg.length + ' >>\nstream\n');
+    push(jpg);
+    push('\nendstream\nendobj\n');
+    const content = 'q 288 0 0 432 0 0 cm /Im0 Do Q';
+    obj(5, '<< /Length ' + content.length + ' >>\nstream\n' + content + '\nendstream');
+
+    const xrefPos = len;
+    let x = 'xref\n0 6\n0000000000 65535 f \n';
+    for (let i = 1; i <= 5; i++) x += String(offsets[i]).padStart(10, '0') + ' 00000 n \n';
+    push(x + 'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n' + xrefPos + '\n%%EOF');
+    return new Blob(chunks, { type: 'application/pdf' });
+  }
+
   // ---------- Result actions ----------
-  $('printBtn').addEventListener('click', () => window.print());
+  $('printBtn').addEventListener('click', () => {
+    if (!pdfFile) return;
+    if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      navigator.share({ files: [pdfFile], title: 'Photobooth 4x6' }).catch(() => {});  // pick "Print"
+    } else {
+      window.open(pdfUrl, '_blank');   // PDF viewer, then Share > Print
+    }
+  });
 
   $('shareBtn').addEventListener('click', async () => {
     if (!finalBlob) return;
