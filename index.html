@@ -18,7 +18,6 @@
     --muted: #9a9aa5;
     --bulb: #ffcf3f;
     --bulb-ink: #1a1400;
-    --danger: #ff5a4d;
     --font: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -74,9 +73,7 @@
     80%  { transform: scale(.92); opacity: 1; }
     100% { transform: scale(.85); opacity: 0; }
   }
-  #flash {
-    position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none;
-  }
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
   #flash.go { animation: flash .45s ease-out; }
   @keyframes flash { 0% { opacity: .95; } 100% { opacity: 0; } }
 
@@ -94,7 +91,7 @@
   #message b { color: var(--text); }
 
   /* ---------- Controls ---------- */
-  #controls { display: flex; align-items: center; gap: 16px; }
+  #controls { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px 14px; }
   #shots { display: flex; gap: 8px; }
   #shots i {
     width: 14px; height: 14px; border-radius: 50%;
@@ -113,12 +110,44 @@
   button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
   button.secondary { background: var(--panel); color: var(--text); font-weight: 500; font-size: 17px; padding: 14px 24px; border: 1px solid #34343c; }
   #flip { padding: 14px 18px; }
+  #frameBtn { max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* photos-per-strip toggle */
+  #layoutSeg { display: flex; background: var(--panel); border: 1px solid #34343c; border-radius: 999px; padding: 4px; }
+  #layoutSeg button {
+    background: transparent; color: var(--muted); font-weight: 500; font-size: 16px; padding: 10px 16px; border-radius: 999px;
+  }
+  #layoutSeg button.on { background: var(--bulb); color: var(--bulb-ink); font-weight: 800; }
+
+  /* ---------- Frame picker ---------- */
+  #frameModal {
+    position: fixed; inset: 0; z-index: 10;
+    background: rgba(0,0,0,.72);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  #framePanel {
+    background: var(--panel); border: 1px solid #34343c; border-radius: 24px;
+    padding: 22px 22px 20px; max-width: 100%; display: flex; flex-direction: column; gap: 16px; align-items: center;
+  }
+  #framePanel h2 { margin: 0; font-size: 22px; font-weight: 800; }
+  #frameList {
+    display: flex; gap: 14px; overflow-x: auto; max-width: calc(100vw - 80px);
+    padding: 6px; -webkit-overflow-scrolling: touch;
+  }
+  .frameItem {
+    flex: 0 0 auto; background: transparent; color: var(--text); font-weight: 500; font-size: 15px;
+    padding: 8px; border-radius: 14px; border: 3px solid transparent;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .frameItem canvas { width: 90px; height: auto; border-radius: 3px; background: #000; display: block; }
+  .frameItem.selected { border-color: var(--bulb); }
 
   /* ---------- Result ---------- */
   #result { height: 100%; width: 100%; display: flex; align-items: center; justify-content: center; gap: 32px; flex-wrap: wrap; }
   #resultImg {
-    height: min(calc(100dvh - 40px), 90vw * 1.5);
-    aspect-ratio: 2 / 3;
+    height: min(calc(100dvh - 40px), 90vw * 1.48);
+    aspect-ratio: 100 / 148;
     border-radius: 4px; box-shadow: 0 10px 40px rgba(0,0,0,.6);
     -webkit-user-select: auto; user-select: auto;
     -webkit-touch-callout: default;
@@ -127,19 +156,9 @@
   #resultSide p { margin: 0 0 6px; color: var(--muted); font-size: 15px; line-height: 1.4; max-width: 240px; }
   @media (max-aspect-ratio: 1/1) {
     #result { flex-direction: column; gap: 16px; }
-    #resultImg { height: min(65dvh, 90vw * 1.5); }
+    #resultImg { height: min(65dvh, 90vw * 1.48); }
     #resultSide { flex-direction: row; flex-wrap: wrap; justify-content: center; }
     #resultSide p { display: none; }
-  }
-
-  /* ---------- Print: 4x6 sheet ---------- */
-  #printSheet { display: none; }
-  @page { size: 4in 6in; margin: 0; }
-  @media print {
-    html, body { height: auto; overflow: visible; background: #fff; padding: 0; }
-    #app, #result { display: none !important; }
-    #printSheet { display: block; }
-    #printSheet img { width: 4in; height: 6in; display: block; }
   }
 </style>
 </head>
@@ -158,8 +177,13 @@
     </div>
     <div id="controls">
       <button id="flip" class="secondary" aria-label="Switch camera" title="Switch camera">Flip</button>
+      <div id="layoutSeg" role="group" aria-label="Photos per strip">
+        <button data-n="3">3 photos</button>
+        <button data-n="4">4 photos</button>
+      </div>
+      <button id="frameBtn" class="secondary hidden">Frame</button>
       <button id="start" disabled>Start photos</button>
-      <div id="shots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div id="shots" aria-hidden="true"></div>
     </div>
   </div>
 
@@ -169,6 +193,7 @@
     <div id="resultSide">
       <p>Press and hold the picture to save it to Photos, or use the buttons below.</p>
       <button id="printBtn">Print</button>
+      <button id="resultFrameBtn" class="secondary hidden">Change frame</button>
       <button id="shareBtn" class="secondary">Save / Share</button>
       <a id="downloadLink" class="hidden" download="photobooth.jpg"></a>
       <button id="againBtn" class="secondary">Take new photos</button>
@@ -176,36 +201,91 @@
   </div>
 </div>
 
-<div id="printSheet"><img id="printImg" alt=""></div>
+<!-- Frame chooser -->
+<div id="frameModal" class="hidden" role="dialog" aria-modal="true" aria-label="Choose a frame">
+  <div id="framePanel">
+    <h2>Choose a frame</h2>
+    <div id="frameList"></div>
+    <button id="frameClose" class="secondary">Close</button>
+  </div>
+</div>
 
 <script>
 (() => {
   // ---------- Settings ----------
-  const SHOTS        = 4;      // pictures per session
-  const COUNT_FROM   = 5;      // seconds in the countdown
+  const COUNT_FROM   = 3;      // seconds in the countdown
   const REVIEW_MS    = 3000;   // how long each new photo stays frozen on screen
+  const CAPTION_TEXT = '';     // optional text under the photos on each strip (built-in black frame only)
+  const DEFAULT_SHOTS = 4;     // 3 or 4 photos per strip when the page first opens
 
-  // Print geometry at 300 DPI. Paper 4x6in => 1200x1800 px; two 2x6in strips side by side.
-  const DPI = 300;
-  const SHEET_W = 4 * DPI, SHEET_H = 6 * DPI;
-  const STRIP_W = 2 * DPI;           // 600
-  const MARGIN  = 30;                // black frame around photos and between them
-  const PHOTO_W = STRIP_W - MARGIN * 2;   // 540
-  const PHOTO_H = Math.round(PHOTO_W * 3 / 4); // 405  (4:3 photos)
-  const CAPTION_TEXT = '';           // e.g. 'Sarah & Tom · 2026' – leave empty for none
+  // Paper used for the Print button's PDF. The whole sheet is built at this paper's exact shape.
+  //   'selphy' = Canon SELPHY postcard paper, 100 x 148 mm (iOS lists it as "Postcard")
+  //   '4x6'    = true 4 x 6 in, 101.6 x 152.4 mm (most other photo printers)
+  const PRINT_PAPER = 'selphy';
+  const PAPERS = { selphy: { w: 100, h: 148 }, '4x6': { w: 101.6, h: 152.4 } };
+
+  // ---------- Sheet + strip geometry ----------
+  // The sheet holds two identical strips side by side. Each strip is half the paper wide and
+  // the full paper tall: 50 x 148 mm on SELPHY paper.
+  const PAPER   = PAPERS[PRINT_PAPER] || PAPERS['4x6'];
+  const SHEET_W = 1200;                                         // px
+  const SHEET_H = Math.round(SHEET_W * PAPER.h / PAPER.w);      // 1776 (SELPHY) or 1800 (4x6)
+  const STRIP_W = SHEET_W / 2;                                  // 600
+  const STRIP_H = SHEET_H;
+
+  // Photo windows for each layout, in strip pixels (600 wide), modelled on the reference strips.
+  //   3 photos: 520x425 photos (same left/right/top margins as 4 photos), big empty area underneath for a caption/logo
+  //   4 photos: 520x347 (3:2) photos with a smaller area underneath
+  const stack = (n, x, top, w, h, gap) =>
+    Array.from({ length: n }, (_, i) => ({ x, y: top + i * (h + gap), w, h }));
+  const LAYOUTS = {
+    3: stack(3, 40,  60, 520, 425, 24),
+    4: stack(4, 40,  60, 520, 347, 24),
+  };
+
+  const CAPTURE_W = 1080, CAPTURE_H = 810;   // stored photo size (4:3), cropped again per window
+
+  // ---------- Frames ----------
+  // Custom frames are images stored in the repo, one per layout (3 and 4 photos), because the
+  // photo windows are in different places. Make each image 600 x 1776 px (or 600 x 1800 if you
+  // set PRINT_PAPER to '4x6'). It is the size of ONE strip.
+  //   • .png → drawn ON TOP of the photos, so leave the photo windows transparent.
+  //   • .jpg → drawn BEHIND the photos, which sit in the windows listed in LAYOUTS above.
+  // Give a frame just one of the two files and it only appears for that layout.
+  // Optional per-frame settings:
+  //   overlay: true/false – override the png/jpg rule above
+  //   slots:   { 3: [{x,y,w,h},…3], 4: [{x,y,w,h},…4] } – your own photo windows
+  // A file that can't be loaded is skipped automatically.
+  const FRAME_CONFIG = [
+    { id: 'black',  name: 'Classic black' },                       // built in, no file needed
+    { id: 'white',  name: 'Classic white', files: { 3: 'frames/white-3.png',  4: 'frames/white-4.png'  } },
+    { id: 'film',   name: 'Film strip',    files: { 3: 'frames/film-3.png',   4: 'frames/film-4.png'   } },
+    { id: 'sunset', name: 'Sunset',        files: { 3: 'frames/sunset-3.jpg', 4: 'frames/sunset-4.jpg' } },
+    // { id: 'party', name: 'Party', files: { 3: 'frames/party-3.png', 4: 'frames/party-4.png' } },
+  ];
 
   // ---------- Elements ----------
   const $ = id => document.getElementById(id);
   const video = $('video'), startBtn = $('start'), flipBtn = $('flip');
   const countdownEl = $('countdown'), flashEl = $('flash'), statusEl = $('status'), messageEl = $('message');
-  const shotDots = [...document.querySelectorAll('#shots i')];
+  const shotsEl = $('shots'), segBtns = [...document.querySelectorAll('#layoutSeg button')];
   const booth = $('booth'), result = $('result');
-  const resultImg = $('resultImg'), printImg = $('printImg'), freezeEl = $('freeze');
+  const resultImg = $('resultImg'), freezeEl = $('freeze');
+  const frameBtn = $('frameBtn'), resultFrameBtn = $('resultFrameBtn');
+  const frameModal = $('frameModal'), frameList = $('frameList');
+  const dots = () => [...shotsEl.querySelectorAll('i')];
 
-  let pdfFile = null, pdfUrl = null;
-  let stream = null, facing = 'user', busy = false, finalBlob = null, finalUrl = null;
+  let stream = null, facing = 'user', busy = false;
+  let shots = DEFAULT_SHOTS;
+  let frames = [FRAME_CONFIG[0]], selected = frames[0];
+  let lastPhotos = null, renderId = 0;
+  let finalBlob = null, finalUrl = null, pdfFile = null, pdfUrl = null;
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  };
 
   // ---------- Camera ----------
   async function startCamera() {
@@ -244,17 +324,17 @@
   // Grab the current video frame, center-cropped to 4:3, mirrored if front camera.
   function grabFrame() {
     const vw = video.videoWidth, vh = video.videoHeight;
-    const target = PHOTO_W / PHOTO_H;
+    const target = CAPTURE_W / CAPTURE_H;
     let sx = 0, sy = 0, sw = vw, sh = vh;
     if (vw / vh > target) { sw = vh * target; sx = (vw - sw) / 2; }
     else                  { sh = vw / target; sy = (vh - sh) / 2; }
 
     const c = document.createElement('canvas');
-    c.width = PHOTO_W; c.height = PHOTO_H;
+    c.width = CAPTURE_W; c.height = CAPTURE_H;
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-    if (facing === 'user') { ctx.translate(PHOTO_W, 0); ctx.scale(-1, 1); }
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, PHOTO_W, PHOTO_H);
+    if (facing === 'user') { ctx.translate(CAPTURE_W, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, CAPTURE_W, CAPTURE_H);
     return c;
   }
 
@@ -274,76 +354,130 @@
     flashEl.classList.remove('go'); void flashEl.offsetWidth; flashEl.classList.add('go');
   }
 
+  function setBusy(b) {
+    busy = b;
+    startBtn.disabled = b; flipBtn.disabled = b; frameBtn.disabled = b;
+    segBtns.forEach(x => x.disabled = b);
+  }
+
   async function runSession() {
     if (busy) return;
-    busy = true;
-    startBtn.disabled = true; flipBtn.disabled = true;
-    shotDots.forEach(d => d.classList.remove('done'));
+    setBusy(true);
+    const total = shots;
+    dots().forEach(d => d.classList.remove('done'));
     statusEl.classList.remove('hidden');
 
     const photos = [];
-    for (let i = 0; i < SHOTS; i++) {
-      statusEl.textContent = 'Photo ' + (i + 1) + ' of ' + SHOTS;
+    for (let i = 0; i < total; i++) {
+      statusEl.textContent = 'Photo ' + (i + 1) + ' of ' + total;
       await countdown(COUNT_FROM);
       const frame = grabFrame();
       photos.push(frame);
       freezeEl.src = frame.toDataURL('image/jpeg', 0.9);
       freezeEl.classList.remove('hidden');   // freeze on the photo just taken
       flash();
-      shotDots[i].classList.add('done');
+      dots()[i].classList.add('done');
       await sleep(REVIEW_MS);
       freezeEl.classList.add('hidden');
     }
     statusEl.classList.add('hidden');
-    await buildSheet(photos);
-    busy = false; flipBtn.disabled = false;
+    lastPhotos = photos;
+    await renderResult();
+    booth.classList.add('hidden');
+    result.classList.remove('hidden');
+    setBusy(false);
+    startBtn.disabled = !stream;
   }
 
-  // ---------- Compose 4x6 sheet with two 2x6 strips ----------
-  async function buildSheet(photos) {
+  // ---------- Photos-per-strip toggle ----------
+  function setShots(n) {
+    shots = n;
+    store.set('photobooth-shots', String(n));
+    segBtns.forEach(b => b.classList.toggle('on', Number(b.dataset.n) === n));
+    shotsEl.innerHTML = '<i></i>'.repeat(n);
+    updateFrameUI();
+  }
+  segBtns.forEach(b => b.addEventListener('click', () => { if (!busy) setShots(Number(b.dataset.n)); }));
+
+  // ---------- Compose ----------
+  // Draw photo `img` into box (x,y,w,h) using "cover" cropping.
+  function drawCover(ctx, img, x, y, w, h) {
+    const iw = img.width, ih = img.height;
+    const ar = w / h;
+    let sx = 0, sy = 0, sw = iw, sh = ih;
+    if (iw / ih > ar) { sw = ih * ar; sx = (iw - sw) / 2; }
+    else              { sh = iw / ar; sy = (ih - sh) / 2; }
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  }
+
+  // Frames that can be used with a given photo count.
+  const availableFrames = n => frames.filter(f => !f.files || (f.art && f.art[n]));
+  // The selected frame, or the built-in black one if it has no art for this layout.
+  const frameFor = n => availableFrames(n).includes(selected) ? selected : frames[0];
+
+  // Draw one strip at horizontal offset x0. photos === null draws grey placeholders.
+  function drawStrip(ctx, x0, photos, frame, count) {
+    const slots = (frame.slots && frame.slots[count]) || LAYOUTS[count];
+    const art = frame.art && frame.art[count];
+    ctx.fillStyle = '#000';
+    ctx.fillRect(x0, 0, STRIP_W, STRIP_H);
+    if (art && !art.overlay) ctx.drawImage(art.img, x0, 0, STRIP_W, STRIP_H);     // background art
+    slots.forEach((s, i) => {
+      if (photos && photos[i]) drawCover(ctx, photos[i], x0 + s.x, s.y, s.w, s.h);
+      else { ctx.fillStyle = '#6b7280'; ctx.fillRect(x0 + s.x, s.y, s.w, s.h); }
+    });
+    if (art && art.overlay) ctx.drawImage(art.img, x0, 0, STRIP_W, STRIP_H);      // overlay art
+    if (!art && CAPTION_TEXT && photos) {
+      const last = slots[slots.length - 1];
+      const yCap = last.y + last.h + (STRIP_H - last.y - last.h) / 2;
+      ctx.fillStyle = '#fff';
+      ctx.font = '600 28px -apple-system, Helvetica, Arial, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(CAPTION_TEXT, x0 + STRIP_W / 2, yCap);
+    }
+  }
+
+  // Full sheet = two identical strips side by side.
+  function composeSheet(photos, frame) {
     const sheet = document.createElement('canvas');
     sheet.width = SHEET_W; sheet.height = SHEET_H;
     const ctx = sheet.getContext('2d');
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, SHEET_W, SHEET_H);
-
-    for (let s = 0; s < 2; s++) {
-      const x0 = s * STRIP_W;
-      photos.forEach((p, i) => {
-        const y = MARGIN + i * (PHOTO_H + MARGIN);
-        ctx.drawImage(p, x0 + MARGIN, y, PHOTO_W, PHOTO_H);
-      });
-      if (CAPTION_TEXT) {
-        ctx.fillStyle = '#fff';
-        ctx.font = '600 28px -apple-system, Helvetica, Arial, sans-serif';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const yCap = MARGIN + SHOTS * (PHOTO_H + MARGIN) + (SHEET_H - (MARGIN + SHOTS * (PHOTO_H + MARGIN))) / 2;
-        ctx.fillText(CAPTION_TEXT, x0 + STRIP_W / 2, yCap);
-      }
-    }
-    // Faint cut guide between the two strips
-    ctx.fillStyle = '#2a2a2a';
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    drawStrip(ctx, 0, photos, frame, photos.length);
+    drawStrip(ctx, STRIP_W, photos, frame, photos.length);
+    ctx.fillStyle = '#2a2a2a';                      // faint cut guide
     ctx.fillRect(STRIP_W - 1, 0, 2, SHEET_H);
-
-    finalBlob = await new Promise(res => sheet.toBlob(res, 'image/jpeg', 0.95));
-    if (finalUrl) URL.revokeObjectURL(finalUrl);
-    finalUrl = URL.createObjectURL(finalBlob);
-    resultImg.src = finalUrl;
-    printImg.src = finalUrl;
-    $('downloadLink').href = finalUrl;
-
-    pdfFile = new File([await makePdf(finalBlob)], 'photobooth-4x6.pdf', { type: 'application/pdf' });
-    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-    pdfUrl = URL.createObjectURL(pdfFile);
-
-    booth.classList.add('hidden');
-    result.classList.remove('hidden');
+    return sheet;
   }
 
-  // Wrap the sheet JPEG in a one-page PDF whose page is exactly 4x6 in (288x432 pt),
-  // image full-bleed. iOS prints PDFs at their true page size, with no URL/date footer.
+  // Build the sheet from lastPhotos + the chosen frame, and refresh the image and PDF.
+  async function renderResult() {
+    const id = ++renderId;
+    const sheet = composeSheet(lastPhotos, frameFor(lastPhotos.length));
+    const blob = await new Promise(res => sheet.toBlob(res, 'image/jpeg', 0.95));
+    const pdf = new File([await makePdf(blob)], 'photobooth-print.pdf', { type: 'application/pdf' });
+    if (id !== renderId) return;                    // a newer render superseded this one
+
+    if (finalUrl) URL.revokeObjectURL(finalUrl);
+    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    finalBlob = blob; pdfFile = pdf;
+    finalUrl = URL.createObjectURL(blob);
+    pdfUrl = URL.createObjectURL(pdf);
+    resultImg.src = finalUrl;
+    $('downloadLink').href = finalUrl;
+  }
+
+  // ---------- Print PDF ----------
+  // One-page PDF whose page is exactly the chosen paper size. The sheet is built at the same
+  // shape, so it fills the page edge to edge with nothing trimmed. iOS prints PDFs at their true
+  // page size, with no URL/date footer.
   async function makePdf(jpegBlob) {
     const jpg = new Uint8Array(await jpegBlob.arrayBuffer());
+    const pw = PAPER.w / 25.4 * 72, ph = PAPER.h / 25.4 * 72;          // page size in points
+    const sc = Math.max(pw / SHEET_W, ph / SHEET_H);                     // "cover" scale
+    const iw = SHEET_W * sc, ih = SHEET_H * sc;
+    const ix = (pw - iw) / 2, iy = (ph - ih) / 2;
+    const f = n => n.toFixed(3);
     const enc = new TextEncoder();
     const chunks = [], offsets = [];
     let len = 0;
@@ -353,13 +487,13 @@
     push('%PDF-1.4\n');
     obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
     obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
-    obj(3, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>');
+    obj(3, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + f(pw) + ' ' + f(ph) + '] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>');
     offsets[4] = len;
     push('4 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + SHEET_W + ' /Height ' + SHEET_H +
          ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpg.length + ' >>\nstream\n');
     push(jpg);
     push('\nendstream\nendobj\n');
-    const content = 'q 288 0 0 432 0 0 cm /Im0 Do Q';
+    const content = 'q ' + f(iw) + ' 0 0 ' + f(ih) + ' ' + f(ix) + ' ' + f(iy) + ' cm /Im0 Do Q';
     obj(5, '<< /Length ' + content.length + ' >>\nstream\n' + content + '\nendstream');
 
     const xrefPos = len;
@@ -369,11 +503,86 @@
     return new Blob(chunks, { type: 'application/pdf' });
   }
 
+  // ---------- Frame picker ----------
+  function loadImage(src) {
+    return new Promise(res => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = () => { console.warn('Frame image not found, skipping:', src); res(null); };
+      im.src = src;
+    });
+  }
+
+  async function loadFrames() {
+    const list = await Promise.all(FRAME_CONFIG.map(async f => {
+      if (!f.files) return f;
+      const art = {};
+      for (const n of [3, 4]) {
+        const src = f.files[n];
+        if (!src) continue;
+        const img = await loadImage(src);
+        if (img) art[n] = { img, overlay: f.overlay !== undefined ? f.overlay : /\.png$/i.test(src.split('?')[0]) };
+      }
+      return { ...f, art };
+    }));
+    return list.filter(f => !f.files || Object.keys(f.art).length);
+  }
+
+  function makeThumb(frame, count) {
+    const c = document.createElement('canvas');
+    c.width = 180; c.height = Math.round(180 * STRIP_H / STRIP_W);
+    const ctx = c.getContext('2d');
+    ctx.scale(180 / STRIP_W, 180 / STRIP_W);
+    drawStrip(ctx, 0, null, frame, count);
+    return c;
+  }
+
+  const currentCount = () => (!result.classList.contains('hidden') && lastPhotos) ? lastPhotos.length : shots;
+
+  function updateFrameUI() {
+    const multi = availableFrames(shots).length > 1;
+    frameBtn.classList.toggle('hidden', !multi);
+    frameBtn.textContent = 'Frame: ' + frameFor(shots).name;
+    const rc = lastPhotos ? lastPhotos.length : shots;
+    resultFrameBtn.classList.toggle('hidden', availableFrames(rc).length < 2);
+  }
+
+  function openFrameModal() {
+    const n = currentCount();
+    const active = frameFor(n);
+    frameList.innerHTML = '';
+    availableFrames(n).forEach(f => {
+      const b = document.createElement('button');
+      b.className = 'frameItem' + (f === active ? ' selected' : '');
+      b.appendChild(makeThumb(f, n));
+      const label = document.createElement('span');
+      label.textContent = f.name;
+      b.appendChild(label);
+      b.addEventListener('click', () => chooseFrame(f));
+      frameList.appendChild(b);
+    });
+    frameModal.classList.remove('hidden');
+  }
+  const closeFrameModal = () => frameModal.classList.add('hidden');
+
+  async function chooseFrame(f) {
+    selected = f;
+    store.set('photobooth-frame', f.id);
+    updateFrameUI();
+    closeFrameModal();
+    if (!result.classList.contains('hidden') && lastPhotos) await renderResult();   // re-frame current photos
+  }
+
+  frameBtn.addEventListener('click', openFrameModal);
+  resultFrameBtn.addEventListener('click', openFrameModal);
+  $('frameClose').addEventListener('click', closeFrameModal);
+  frameModal.addEventListener('click', e => { if (e.target === frameModal) closeFrameModal(); });
+
   // ---------- Result actions ----------
   $('printBtn').addEventListener('click', () => {
     if (!pdfFile) return;
     if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-      navigator.share({ files: [pdfFile], title: 'Photobooth 4x6' }).catch(() => {});  // pick "Print"
+      navigator.share({ files: [pdfFile], title: 'Photobooth print' }).catch(() => {});  // pick "Print"
     } else {
       window.open(pdfUrl, '_blank');   // PDF viewer, then Share > Print
     }
@@ -392,8 +601,10 @@
   $('againBtn').addEventListener('click', () => {
     result.classList.add('hidden');
     booth.classList.remove('hidden');
-    shotDots.forEach(d => d.classList.remove('done'));
-    if (!stream) startCamera();
+    dots().forEach(d => d.classList.remove('done'));
+    lastPhotos = null;
+    updateFrameUI();
+    if (!stream) startCamera(); else startBtn.disabled = false;
   });
 
   // ---------- Wiring ----------
@@ -411,7 +622,14 @@
     }
   });
 
+  const savedShots = Number(store.get('photobooth-shots'));
+  setShots(savedShots === 3 || savedShots === 4 ? savedShots : DEFAULT_SHOTS);
   startCamera();
+  loadFrames().then(list => {
+    frames = list;
+    selected = frames.find(f => f.id === store.get('photobooth-frame')) || frames[0];
+    updateFrameUI();
+  });
 })();
 </script>
 </body>
