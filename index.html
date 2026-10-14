@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Photobooth</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #131316;
+    --panel: #1d1d22;
+    --text: #f4f4f6;
+    --muted: #9a9aa5;
+    --bulb: #ffcf3f;
+    --bulb-ink: #1a1400;
+    --danger: #ff5a4d;
+    --font: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    -webkit-user-select: none; user-select: none;
+    touch-action: manipulation;
+    overflow: hidden;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  #app {
+    height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; padding: 16px;
+  }
+  .hidden { display: none !important; }
+
+  /* ---------- Camera stage ---------- */
+  #stage {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    width: min(100%, calc((100dvh - 150px) * 4 / 3));
+    background: #000;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 0 0 6px var(--panel), 0 0 0 8px #2c2c33;
+  }
+  #video {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; background: #000;
+  }
+  #video.mirror { transform: scaleX(-1); }
+
+  #countdown {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: min(45vh, 45vw);
+    color: #fff;
+    text-shadow: 0 6px 40px rgba(0,0,0,.65), 0 0 6px rgba(0,0,0,.5);
+    pointer-events: none;
+  }
+  #countdown.tick span { animation: pop 1s ease-out forwards; }
+  @keyframes pop {
+    0%   { transform: scale(1.5); opacity: 0; }
+    15%  { transform: scale(1);   opacity: 1; }
+    80%  { transform: scale(.92); opacity: 1; }
+    100% { transform: scale(.85); opacity: 0; }
+  }
+  #flash {
+    position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none;
+  }
+  #flash.go { animation: flash .45s ease-out; }
+  @keyframes flash { 0% { opacity: .95; } 100% { opacity: 0; } }
+
+  #status {
+    position: absolute; left: 14px; top: 12px;
+    background: rgba(0,0,0,.5); padding: 6px 12px; border-radius: 999px;
+    font-size: 15px; font-weight: 500;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  #message {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 24px; font-size: 18px; line-height: 1.4; color: var(--muted);
+    background: #000;
+  }
+  #message b { color: var(--text); }
+
+  /* ---------- Controls ---------- */
+  #controls { display: flex; align-items: center; gap: 16px; }
+  #shots { display: flex; gap: 8px; }
+  #shots i {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid #4a4a55; background: transparent; transition: all .2s;
+  }
+  #shots i.done { background: var(--bulb); border-color: var(--bulb); }
+
+  button {
+    font-family: var(--font); font-weight: 800; font-size: 20px;
+    border: 0; border-radius: 999px; padding: 16px 34px; cursor: pointer;
+    background: var(--bulb); color: var(--bulb-ink);
+    transition: transform .08s, opacity .2s;
+  }
+  button:active { transform: scale(.96); }
+  button:disabled { opacity: .35; cursor: default; }
+  button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  button.secondary { background: var(--panel); color: var(--text); font-weight: 500; font-size: 17px; padding: 14px 24px; border: 1px solid #34343c; }
+  #flip { padding: 14px 18px; }
+
+  /* ---------- Result ---------- */
+  #result { height: 100%; width: 100%; display: flex; align-items: center; justify-content: center; gap: 32px; flex-wrap: wrap; }
+  #resultImg {
+    height: min(calc(100dvh - 40px), 90vw * 1.5);
+    aspect-ratio: 2 / 3;
+    border-radius: 4px; box-shadow: 0 10px 40px rgba(0,0,0,.6);
+    -webkit-user-select: auto; user-select: auto;
+    -webkit-touch-callout: default;
+  }
+  #resultSide { display: flex; flex-direction: column; gap: 12px; align-items: stretch; min-width: 220px; }
+  #resultSide p { margin: 0 0 6px; color: var(--muted); font-size: 15px; line-height: 1.4; max-width: 240px; }
+  @media (max-aspect-ratio: 1/1) {
+    #result { flex-direction: column; gap: 16px; }
+    #resultImg { height: min(65dvh, 90vw * 1.5); }
+    #resultSide { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+    #resultSide p { display: none; }
+  }
+
+  /* ---------- Print: 4x6 sheet ---------- */
+  #printSheet { display: none; }
+  @page { size: 4in 6in; margin: 0; }
+  @media print {
+    html, body { height: auto; overflow: visible; background: #fff; padding: 0; }
+    #app, #result { display: none !important; }
+    #printSheet { display: block; }
+    #printSheet img { width: 4in; height: 6in; display: block; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Booth -->
+  <div id="booth" style="display:contents">
+    <div id="stage">
+      <video id="video" autoplay playsinline muted></video>
+      <div id="countdown"></div>
+      <div id="flash"></div>
+      <div id="status" class="hidden"></div>
+      <div id="message">Starting camera…<br>Tap <b>Allow</b> when Safari asks for access.</div>
+    </div>
+    <div id="controls">
+      <button id="flip" class="secondary" aria-label="Switch camera" title="Switch camera">Flip</button>
+      <button id="start" disabled>Start photos</button>
+      <div id="shots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div id="result" class="hidden">
+    <img id="resultImg" alt="Your photo strips">
+    <div id="resultSide">
+      <p>Press and hold the picture to save it to Photos, or use the buttons below.</p>
+      <button id="printBtn">Print</button>
+      <button id="shareBtn" class="secondary">Save / Share</button>
+      <a id="downloadLink" class="hidden" download="photobooth.jpg"></a>
+      <button id="againBtn" class="secondary">Take new photos</button>
+    </div>
+  </div>
+</div>
+
+<div id="printSheet"><img id="printImg" alt=""></div>
+
+<script>
+(() => {
+  // ---------- Settings ----------
+  const SHOTS        = 4;      // pictures per session
+  const COUNT_FROM   = 3;      // seconds in the countdown
+  const PAUSE_MS     = 900;    // pause between pictures
+
+  // Print geometry at 300 DPI. Paper 4x6in => 1200x1800 px; two 2x6in strips side by side.
+  const DPI = 300;
+  const SHEET_W = 4 * DPI, SHEET_H = 6 * DPI;
+  const STRIP_W = 2 * DPI;           // 600
+  const MARGIN  = 30;                // black frame around photos and between them
+  const PHOTO_W = STRIP_W - MARGIN * 2;   // 540
+  const PHOTO_H = Math.round(PHOTO_W * 3 / 4); // 405  (4:3 photos)
+  const CAPTION_TEXT = '';           // e.g. 'Sarah & Tom · 2026' – leave empty for none
+
+  // ---------- Elements ----------
+  const $ = id => document.getElementById(id);
+  const video = $('video'), startBtn = $('start'), flipBtn = $('flip');
+  const countdownEl = $('countdown'), flashEl = $('flash'), statusEl = $('status'), messageEl = $('message');
+  const shotDots = [...document.querySelectorAll('#shots i')];
+  const booth = $('booth'), result = $('result');
+  const resultImg = $('resultImg'), printImg = $('printImg');
+
+  let stream = null, facing = 'user', busy = false, finalBlob = null, finalUrl = null;
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // ---------- Camera ----------
+  async function startCamera() {
+    stopCamera();
+    startBtn.disabled = true;
+    messageEl.classList.remove('hidden');
+    messageEl.innerHTML = 'Starting camera…<br>Tap <b>Allow</b> when Safari asks for access.';
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      messageEl.innerHTML = 'This browser can’t access the camera.<br>Open this page in <b>Safari</b> over <b>https://</b>.';
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+      });
+      video.srcObject = stream;
+      video.classList.toggle('mirror', facing === 'user');
+      await video.play();
+      messageEl.classList.add('hidden');
+      startBtn.disabled = false;
+    } catch (err) {
+      console.error(err);
+      const denied = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError');
+      messageEl.innerHTML = denied
+        ? 'Camera access is blocked.<br>Go to <b>Settings › Safari › Camera</b>, choose <b>Ask</b> or <b>Allow</b>, then reload this page.'
+        : 'Couldn’t start the camera.<br>' + (err && err.message ? err.message : 'Please reload and try again.');
+    }
+  }
+  function stopCamera() {
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  }
+
+  // ---------- Capture ----------
+  // Grab the current video frame, center-cropped to 4:3, mirrored if front camera.
+  function grabFrame() {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const target = PHOTO_W / PHOTO_H;
+    let sx = 0, sy = 0, sw = vw, sh = vh;
+    if (vw / vh > target) { sw = vh * target; sx = (vw - sw) / 2; }
+    else                  { sh = vw / target; sy = (vh - sh) / 2; }
+
+    const c = document.createElement('canvas');
+    c.width = PHOTO_W; c.height = PHOTO_H;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    if (facing === 'user') { ctx.translate(PHOTO_W, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, PHOTO_W, PHOTO_H);
+    return c;
+  }
+
+  async function countdown(n) {
+    for (let i = n; i >= 1; i--) {
+      countdownEl.classList.remove('tick');
+      countdownEl.innerHTML = '<span>' + i + '</span>';
+      void countdownEl.offsetWidth;            // restart animation
+      countdownEl.classList.add('tick');
+      await sleep(1000);
+    }
+    countdownEl.classList.remove('tick');
+    countdownEl.innerHTML = '';
+  }
+
+  function flash() {
+    flashEl.classList.remove('go'); void flashEl.offsetWidth; flashEl.classList.add('go');
+  }
+
+  async function runSession() {
+    if (busy) return;
+    busy = true;
+    startBtn.disabled = true; flipBtn.disabled = true;
+    shotDots.forEach(d => d.classList.remove('done'));
+    statusEl.classList.remove('hidden');
+
+    const photos = [];
+    for (let i = 0; i < SHOTS; i++) {
+      statusEl.textContent = 'Photo ' + (i + 1) + ' of ' + SHOTS;
+      await countdown(COUNT_FROM);
+      photos.push(grabFrame());
+      flash();
+      shotDots[i].classList.add('done');
+      if (i < SHOTS - 1) await sleep(PAUSE_MS);
+    }
+    statusEl.classList.add('hidden');
+    await sleep(500);
+    await buildSheet(photos);
+    busy = false; flipBtn.disabled = false;
+  }
+
+  // ---------- Compose 4x6 sheet with two 2x6 strips ----------
+  async function buildSheet(photos) {
+    const sheet = document.createElement('canvas');
+    sheet.width = SHEET_W; sheet.height = SHEET_H;
+    const ctx = sheet.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, SHEET_W, SHEET_H);
+
+    for (let s = 0; s < 2; s++) {
+      const x0 = s * STRIP_W;
+      photos.forEach((p, i) => {
+        const y = MARGIN + i * (PHOTO_H + MARGIN);
+        ctx.drawImage(p, x0 + MARGIN, y, PHOTO_W, PHOTO_H);
+      });
+      if (CAPTION_TEXT) {
+        ctx.fillStyle = '#fff';
+        ctx.font = '600 28px -apple-system, Helvetica, Arial, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const yCap = MARGIN + SHOTS * (PHOTO_H + MARGIN) + (SHEET_H - (MARGIN + SHOTS * (PHOTO_H + MARGIN))) / 2;
+        ctx.fillText(CAPTION_TEXT, x0 + STRIP_W / 2, yCap);
+      }
+    }
+    // Faint cut guide between the two strips
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(STRIP_W - 1, 0, 2, SHEET_H);
+
+    finalBlob = await new Promise(res => sheet.toBlob(res, 'image/jpeg', 0.95));
+    if (finalUrl) URL.revokeObjectURL(finalUrl);
+    finalUrl = URL.createObjectURL(finalBlob);
+    resultImg.src = finalUrl;
+    printImg.src = finalUrl;
+    $('downloadLink').href = finalUrl;
+
+    booth.classList.add('hidden');
+    result.classList.remove('hidden');
+  }
+
+  // ---------- Result actions ----------
+  $('printBtn').addEventListener('click', () => window.print());
+
+  $('shareBtn').addEventListener('click', async () => {
+    if (!finalBlob) return;
+    const file = new File([finalBlob], 'photobooth.jpg', { type: 'image/jpeg' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'Photobooth' }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    $('downloadLink').click();   // fallback
+  });
+
+  $('againBtn').addEventListener('click', () => {
+    result.classList.add('hidden');
+    booth.classList.remove('hidden');
+    shotDots.forEach(d => d.classList.remove('done'));
+    if (!stream) startCamera();
+  });
+
+  // ---------- Wiring ----------
+  startBtn.addEventListener('click', runSession);
+  flipBtn.addEventListener('click', () => {
+    facing = facing === 'user' ? 'environment' : 'user';
+    startCamera();
+  });
+
+  // Restart the camera if Safari paused it while the tab was in the background
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && !busy && !booth.classList.contains('hidden')) {
+      const live = stream && stream.getVideoTracks().some(t => t.readyState === 'live');
+      if (!live) startCamera();
+    }
+  });
+
+  startCamera();
+})();
+</script>
+</body>
+</html>
