@@ -41,8 +41,9 @@
   /* ---------- Camera stage ---------- */
   #stage {
     position: relative;
-    aspect-ratio: 4 / 3;
-    width: min(100%, calc((100dvh - 150px) * 4 / 3));
+    --ar: 1.3333;                      /* set from the selected frame's photo window */
+    aspect-ratio: var(--ar);
+    width: min(100%, calc((100dvh - 150px) * var(--ar)));
     background: #000;
     border-radius: 20px;
     overflow: hidden;
@@ -74,7 +75,7 @@
     100% { transform: scale(.85); opacity: 0; }
   }
   #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
-  #flash.go { animation: flash .45s ease-out; }
+  #flash.go { animation: flash 2s ease-out; }   /* fades out over 2s of the 3s freeze */
   @keyframes flash { 0% { opacity: .95; } 100% { opacity: 0; } }
 
   #status {
@@ -213,8 +214,8 @@
 <script>
 (() => {
   // ---------- Settings ----------
-  const COUNT_FROM   = 5;      // seconds in the countdown
-  const REVIEW_MS    = 1000;   // how long each new photo stays frozen on screen
+  const COUNT_FROM   = 3;      // seconds in the countdown
+  const REVIEW_MS    = 3000;   // how long each new photo stays frozen on screen
   const CAPTION_TEXT = '';     // optional text under the photos on each strip (built-in black frame only)
   const DEFAULT_SHOTS = 4;     // 3 or 4 photos per strip when the page first opens
 
@@ -539,7 +540,14 @@
 
   const currentCount = () => (!result.classList.contains('hidden') && lastPhotos) ? lastPhotos.length : shots;
 
+  // Make the live preview the same shape as the photo windows of the selected frame / layout.
+  function applyPreviewAspect() {
+    const slots = (frameFor(shots).slots && frameFor(shots).slots[shots]) || LAYOUTS[shots];
+    $('stage').style.setProperty('--ar', (slots[0].w / slots[0].h).toFixed(4));
+  }
+
   function updateFrameUI() {
+    applyPreviewAspect();
     const multi = availableFrames(shots).length > 1;
     frameBtn.classList.toggle('hidden', !multi);
     frameBtn.textContent = 'Frame: ' + frameFor(shots).name;
