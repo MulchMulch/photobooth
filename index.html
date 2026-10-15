@@ -18,6 +18,7 @@
     --muted: #9a9aa5;
     --bulb: #ffcf3f;
     --bulb-ink: #1a1400;
+    --stage-h: calc(100dvh - 190px);   /* height reserved for the preview, whatever its shape */
     --font: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -39,11 +40,15 @@
   .hidden { display: none !important; }
 
   /* ---------- Camera stage ---------- */
+  #stageArea {
+    width: 100%; height: var(--stage-h);
+    display: flex; align-items: center; justify-content: center;
+  }
   #stage {
     position: relative;
     --ar: 1.3333;                      /* set from the selected frame's photo window */
     aspect-ratio: var(--ar);
-    width: min(100%, calc((100dvh - 150px) * var(--ar)));
+    width: min(100%, calc(var(--stage-h) * var(--ar)));
     background: #000;
     border-radius: 20px;
     overflow: hidden;
@@ -75,7 +80,7 @@
     100% { transform: scale(.85); opacity: 0; }
   }
   #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
-  #flash.go { animation: flash 3s ease-out; }   /* fades out over 3s of the 3s freeze */
+  #flash.go { animation: flash 3s ease-out; }   /* fades out over the whole 3s freeze */
   @keyframes flash { 0% { opacity: .95; } 100% { opacity: 0; } }
 
   #status {
@@ -99,6 +104,7 @@
     border: 2px solid #4a4a55; background: transparent; transition: all .2s;
   }
   #shots i.done { background: var(--bulb); border-color: var(--bulb); }
+  #shots i.off { visibility: hidden; }   /* keeps its space so nothing shifts */
 
   button {
     font-family: var(--font); font-weight: 800; font-size: 20px;
@@ -111,7 +117,7 @@
   button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
   button.secondary { background: var(--panel); color: var(--text); font-weight: 500; font-size: 17px; padding: 14px 24px; border: 1px solid #34343c; }
   #flip { padding: 14px 18px; }
-  #frameBtn { max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #frameBtn { width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* photos-per-strip toggle */
   #layoutSeg { display: flex; background: var(--panel); border: 1px solid #34343c; border-radius: 999px; padding: 4px; }
@@ -168,6 +174,7 @@
 <div id="app">
   <!-- Booth -->
   <div id="booth" style="display:contents">
+    <div id="stageArea">
     <div id="stage">
       <video id="video" autoplay playsinline muted></video>
       <img id="freeze" class="hidden" alt="">
@@ -175,6 +182,7 @@
       <div id="flash"></div>
       <div id="status" class="hidden"></div>
       <div id="message">Starting camera…<br>Tap <b>Allow</b> when Safari asks for access.</div>
+    </div>
     </div>
     <div id="controls">
       <button id="flip" class="secondary" aria-label="Switch camera" title="Switch camera">Flip</button>
@@ -214,7 +222,7 @@
 <script>
 (() => {
   // ---------- Settings ----------
-  const COUNT_FROM   = 3;      // seconds in the countdown
+  const COUNT_FROM   = 5;      // seconds in the countdown
   const REVIEW_MS    = 3000;   // how long each new photo stays frozen on screen
   const CAPTION_TEXT = '';     // optional text under the photos on each strip (built-in black frame only)
   const DEFAULT_SHOTS = 4;     // 3 or 4 photos per strip when the page first opens
@@ -258,9 +266,9 @@
   //   slots:   { 3: [{x,y,w,h},…3], 4: [{x,y,w,h},…4] } – your own photo windows
   // A file that can't be loaded is skipped automatically.
   const FRAME_CONFIG = [
-    { id: 'black',  name: 'Classic black' },                       // built in, no file needed
-    { id: 'white',  name: 'Classic white', files: { 3: 'frames/white-3.png',  4: 'frames/white-4.png'  } },
-    { id: 'film',   name: 'Film strip',    files: { 3: 'frames/film-3.png',   4: 'frames/film-4.png'   } },
+    { id: 'black',  name: 'Classic Black' },                       // built in, no file needed
+    { id: 'white',  name: 'Classic White', files: { 3: 'frames/white-3.png',  4: 'frames/white-4.png'  } },
+    { id: 'film',   name: 'Film Strip',    files: { 3: 'frames/film-3.png',   4: 'frames/film-4.png'   } },
     { id: 'sunset', name: 'Sunset',        files: { 3: 'frames/sunset-3.jpg', 4: 'frames/sunset-4.jpg' } },
     // { id: 'party', name: 'Party', files: { 3: 'frames/party-3.png', 4: 'frames/party-4.png' } },
   ];
@@ -274,7 +282,7 @@
   const resultImg = $('resultImg'), freezeEl = $('freeze');
   const frameBtn = $('frameBtn'), resultFrameBtn = $('resultFrameBtn');
   const frameModal = $('frameModal'), frameList = $('frameList');
-  const dots = () => [...shotsEl.querySelectorAll('i')];
+  const dots = () => [...shotsEl.querySelectorAll('i')].slice(0, shots);   // the dots in use
 
   let stream = null, facing = 'user', busy = false;
   let shots = DEFAULT_SHOTS;
@@ -351,9 +359,46 @@
     countdownEl.innerHTML = '';
   }
 
+  // Shutter sound, synthesized with Web Audio (no audio file needed). iOS only allows audio after
+  // a tap, so the context is created/resumed when "Start photos" is pressed.
+  let audioCtx = null;
+  function unlockAudio() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) {}
+  }
+  function playShutter() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    const click = (t, dur, freq, vol) => {
+      const n = Math.floor(audioCtx.sampleRate * dur);
+      const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
+      const src = audioCtx.createBufferSource(); src.buffer = buf;
+      const bp = audioCtx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = 0.8;
+      const g = audioCtx.createGain(); g.gain.value = vol;
+      src.connect(bp); bp.connect(g); g.connect(audioCtx.destination);
+      src.start(t);
+    };
+    const thump = (t, f0, f1, vol) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + 0.06);
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t); o.stop(t + 0.08);
+    };
+    click(t0, 0.045, 3200, 1.1);  thump(t0, 220, 90, 0.5);          // shutter opens
+    click(t0 + 0.085, 0.07, 2000, 0.9); thump(t0 + 0.085, 160, 70, 0.4);   // shutter closes
+  }
+
   function flash() {
     flashEl.classList.remove('go'); void flashEl.offsetWidth; flashEl.classList.add('go');
   }
+  // Clear the class when the fade ends so the animation can't replay when the booth is shown again.
+  flashEl.addEventListener('animationend', () => flashEl.classList.remove('go'));
 
   function setBusy(b) {
     busy = b;
@@ -363,6 +408,7 @@
 
   async function runSession() {
     if (busy) return;
+    unlockAudio();
     setBusy(true);
     const total = shots;
     dots().forEach(d => d.classList.remove('done'));
@@ -377,12 +423,14 @@
       freezeEl.src = frame.toDataURL('image/jpeg', 0.9);
       freezeEl.classList.remove('hidden');   // freeze on the photo just taken
       flash();
+      playShutter();
       dots()[i].classList.add('done');
       await sleep(REVIEW_MS);
       freezeEl.classList.add('hidden');
     }
     statusEl.classList.add('hidden');
     lastPhotos = photos;
+    flashEl.classList.remove('go');
     await renderResult();
     booth.classList.add('hidden');
     result.classList.remove('hidden');
@@ -395,7 +443,8 @@
     shots = n;
     store.set('photobooth-shots', String(n));
     segBtns.forEach(b => b.classList.toggle('on', Number(b.dataset.n) === n));
-    shotsEl.innerHTML = '<i></i>'.repeat(n);
+    shotsEl.innerHTML = '<i></i><i></i><i></i><i></i>';        // always 4 so the row never shifts
+    shotsEl.lastElementChild.classList.toggle('off', n < 4);   // 4th dot appears at the far right
     updateFrameUI();
   }
   segBtns.forEach(b => b.addEventListener('click', () => { if (!busy) setShots(Number(b.dataset.n)); }));
@@ -607,6 +656,8 @@
   });
 
   $('againBtn').addEventListener('click', () => {
+    flashEl.classList.remove('go');
+    freezeEl.classList.add('hidden');
     result.classList.add('hidden');
     booth.classList.remove('hidden');
     dots().forEach(d => d.classList.remove('done'));
