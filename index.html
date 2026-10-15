@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Photobooth</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -18,12 +18,13 @@
     --muted: #9a9aa5;
     --bulb: #ffcf3f;
     --bulb-ink: #1a1400;
-    --stage-h: calc(100dvh - 190px);   /* height reserved for the preview, whatever its shape */
+    --stage-h: calc(100dvh - 240px);   /* height reserved for the preview, whatever its shape */
     --font: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { height: 100%; margin: 0; }
+  html, body { height: 100%; margin: 0; overscroll-behavior: none; touch-action: none; -webkit-text-size-adjust: 100%; }
   body {
+    position: fixed; inset: 0; width: 100%;
     background: var(--bg);
     color: var(--text);
     font-family: var(--font);
@@ -97,7 +98,8 @@
   #message b { color: var(--text); }
 
   /* ---------- Controls ---------- */
-  #controls { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px 14px; }
+  #controls { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px 14px; }
   #shots { display: flex; gap: 8px; }
   #shots i {
     width: 14px; height: 14px; border-radius: 50%;
@@ -116,15 +118,20 @@
   button:disabled { opacity: .35; cursor: default; }
   button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
   button.secondary { background: var(--panel); color: var(--text); font-weight: 500; font-size: 17px; padding: 14px 24px; border: 1px solid #34343c; }
-  #flip { padding: 14px 18px; }
+  #flip { padding: 11px 16px; line-height: 0; }
+  #flip img { width: 32px; height: 32px; display: block; }
   #frameBtn { width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  /* photos-per-strip toggle */
-  #layoutSeg { display: flex; background: var(--panel); border: 1px solid #34343c; border-radius: 999px; padding: 4px; }
-  #layoutSeg button {
+  /* option groups: label + choices */
+  .opt {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--panel); border: 1px solid #34343c; border-radius: 999px; padding: 4px 4px 4px 18px;
+  }
+  .optLabel { color: var(--muted); font-size: 16px; font-weight: 500; white-space: nowrap; margin-right: 4px; }
+  .opt button {
     background: transparent; color: var(--muted); font-weight: 500; font-size: 16px; padding: 10px 16px; border-radius: 999px;
   }
-  #layoutSeg button.on { background: var(--bulb); color: var(--bulb-ink); font-weight: 800; }
+  .opt button.on { background: var(--bulb); color: var(--bulb-ink); font-weight: 800; }
 
   /* ---------- Frame picker ---------- */
   #frameModal {
@@ -140,7 +147,7 @@
   #framePanel h2 { margin: 0; font-size: 22px; font-weight: 800; }
   #frameList {
     display: flex; gap: 14px; overflow-x: auto; max-width: calc(100vw - 80px);
-    padding: 6px; -webkit-overflow-scrolling: touch;
+    padding: 6px; -webkit-overflow-scrolling: touch; touch-action: pan-x; overscroll-behavior: contain;
   }
   .frameItem {
     flex: 0 0 auto; background: transparent; color: var(--text); font-weight: 500; font-size: 15px;
@@ -160,12 +167,10 @@
     -webkit-touch-callout: default;
   }
   #resultSide { display: flex; flex-direction: column; gap: 12px; align-items: stretch; min-width: 220px; }
-  #resultSide p { margin: 0 0 6px; color: var(--muted); font-size: 15px; line-height: 1.4; max-width: 240px; }
   @media (max-aspect-ratio: 1/1) {
     #result { flex-direction: column; gap: 16px; }
     #resultImg { height: min(65dvh, 90vw * 1.48); }
     #resultSide { flex-direction: row; flex-wrap: wrap; justify-content: center; }
-    #resultSide p { display: none; }
   }
 </style>
 </head>
@@ -185,14 +190,25 @@
     </div>
     </div>
     <div id="controls">
-      <button id="flip" class="secondary" aria-label="Switch camera" title="Switch camera">Flip</button>
-      <div id="layoutSeg" role="group" aria-label="Photos per strip">
-        <button data-n="3">3 photos</button>
-        <button data-n="4">4 photos</button>
+      <div class="row">
+        <div class="opt" id="layoutSeg" role="group" aria-label="Photos">
+          <span class="optLabel">Photos</span>
+          <button data-n="3">3</button>
+          <button data-n="4">4</button>
+        </div>
+        <div class="opt" id="timeSeg" role="group" aria-label="Time Between Photos">
+          <span class="optLabel">Time Between Photos</span>
+          <button data-t="3">3 Seconds</button>
+          <button data-t="5">5 Seconds</button>
+          <button data-t="10">10 Seconds</button>
+        </div>
       </div>
-      <button id="frameBtn" class="secondary hidden">Frame</button>
-      <button id="start" disabled>Start photos</button>
-      <div id="shots" aria-hidden="true"></div>
+      <div class="row">
+        <button id="flip" class="secondary" aria-label="Flip camera" title="Flip camera"><img src="icons/flip.png" alt=""></button>
+        <button id="frameBtn" class="secondary hidden">Frame</button>
+        <button id="start" disabled>Take Photos</button>
+        <div id="shots" aria-hidden="true"></div>
+      </div>
     </div>
   </div>
 
@@ -200,12 +216,11 @@
   <div id="result" class="hidden">
     <img id="resultImg" alt="Your photo strips">
     <div id="resultSide">
-      <p>Press and hold the picture to save it to Photos, or use the buttons below.</p>
       <button id="printBtn">Print</button>
-      <button id="resultFrameBtn" class="secondary hidden">Change frame</button>
+      <button id="resultFrameBtn" class="secondary hidden">Change Frame</button>
       <button id="shareBtn" class="secondary">Save / Share</button>
       <a id="downloadLink" class="hidden" download="photobooth.jpg"></a>
-      <button id="againBtn" class="secondary">Take new photos</button>
+      <button id="againBtn" class="secondary">Take New Photos</button>
     </div>
   </div>
 </div>
@@ -222,7 +237,7 @@
 <script>
 (() => {
   // ---------- Settings ----------
-  const COUNT_FROM   = 5;      // seconds in the countdown
+  const DEFAULT_COUNT = 5;     // countdown seconds before each photo when the page first opens (3, 5 or 10)
   const REVIEW_MS    = 3000;   // how long each new photo stays frozen on screen
   const CAPTION_TEXT = '';     // optional text under the photos on each strip (built-in black frame only)
   const DEFAULT_SHOTS = 4;     // 3 or 4 photos per strip when the page first opens
@@ -278,6 +293,7 @@
   const video = $('video'), startBtn = $('start'), flipBtn = $('flip');
   const countdownEl = $('countdown'), flashEl = $('flash'), statusEl = $('status'), messageEl = $('message');
   const shotsEl = $('shots'), segBtns = [...document.querySelectorAll('#layoutSeg button')];
+  const timeBtns = [...document.querySelectorAll('#timeSeg button')];
   const booth = $('booth'), result = $('result');
   const resultImg = $('resultImg'), freezeEl = $('freeze');
   const frameBtn = $('frameBtn'), resultFrameBtn = $('resultFrameBtn');
@@ -285,7 +301,7 @@
   const dots = () => [...shotsEl.querySelectorAll('i')].slice(0, shots);   // the dots in use
 
   let stream = null, facing = 'user', busy = false;
-  let shots = DEFAULT_SHOTS;
+  let shots = DEFAULT_SHOTS, countSecs = DEFAULT_COUNT;
   let frames = [FRAME_CONFIG[0]], selected = frames[0];
   let lastPhotos = null, renderId = 0;
   let finalBlob = null, finalUrl = null, pdfFile = null, pdfUrl = null;
@@ -446,6 +462,7 @@
     busy = b;
     startBtn.disabled = b; flipBtn.disabled = b; frameBtn.disabled = b;
     segBtns.forEach(x => x.disabled = b);
+    timeBtns.forEach(x => x.disabled = b);
   }
 
   async function runSession() {
@@ -459,7 +476,7 @@
     const photos = [];
     for (let i = 0; i < total; i++) {
       statusEl.textContent = 'Photo ' + (i + 1) + ' of ' + total;
-      await countdown(COUNT_FROM);
+      await countdown(countSecs);
       const frame = grabFrame();
       photos.push(frame);
       freezeEl.src = frame.toDataURL('image/jpeg', 0.9);
@@ -490,6 +507,14 @@
     updateFrameUI();
   }
   segBtns.forEach(b => b.addEventListener('click', () => { if (!busy) setShots(Number(b.dataset.n)); }));
+
+  // ---------- Time between photos (countdown length) ----------
+  function setCount(t) {
+    countSecs = t;
+    store.set('photobooth-count', String(t));
+    timeBtns.forEach(b => b.classList.toggle('on', Number(b.dataset.t) === t));
+  }
+  timeBtns.forEach(b => b.addEventListener('click', () => { if (!busy) setCount(Number(b.dataset.t)); }));
 
   // ---------- Compose ----------
   // Draw photo `img` into box (x,y,w,h) using "cover" cropping.
@@ -708,6 +733,17 @@
     if (!stream) startCamera(); else startBtn.disabled = false;
   });
 
+  // ---------- No zoom, no scrolling ----------
+  // Safari ignores user-scalable=no, so block pinch, double-tap zoom and page panning directly.
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(t =>
+    document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+  document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+  document.addEventListener('touchmove', e => {
+    if (!e.target.closest || !e.target.closest('#frameList')) e.preventDefault();   // frame list may scroll sideways
+  }, { passive: false });
+  document.addEventListener('wheel', e => { if (e.ctrlKey || !e.target.closest('#frameList')) e.preventDefault(); }, { passive: false });
+  document.addEventListener('contextmenu', e => { if (e.target.tagName !== 'IMG') e.preventDefault(); });
+
   // ---------- Wiring ----------
   startBtn.addEventListener('click', runSession);
   flipBtn.addEventListener('click', () => {
@@ -725,6 +761,8 @@
 
   const savedShots = Number(store.get('photobooth-shots'));
   setShots(savedShots === 3 || savedShots === 4 ? savedShots : DEFAULT_SHOTS);
+  const savedCount = Number(store.get('photobooth-count'));
+  setCount([3, 5, 10].includes(savedCount) ? savedCount : DEFAULT_COUNT);
   startCamera();
   loadFrames().then(list => {
     frames = list;
