@@ -127,7 +127,8 @@
     display: flex; align-items: center; gap: 6px;
     background: var(--panel); border: 1px solid #34343c; border-radius: 999px; padding: 4px 4px 4px 18px;
   }
-  .optLabel { color: var(--muted); font-size: 16px; font-weight: 500; white-space: nowrap; margin-right: 4px; }
+  .optLabel { color: var(--muted); font-size: 16px; font-weight: 500; white-space: nowrap; }
+  .optDiv { width: 1px; height: 24px; background: #4a4a55; margin: 0 8px 0 6px; flex: 0 0 auto; }
   .opt button {
     background: transparent; color: var(--muted); font-weight: 500; font-size: 16px; padding: 10px 16px; border-radius: 999px;
   }
@@ -193,11 +194,13 @@
       <div class="row">
         <div class="opt" id="layoutSeg" role="group" aria-label="Photos">
           <span class="optLabel">Photos</span>
+          <span class="optDiv" aria-hidden="true"></span>
           <button data-n="3">3</button>
           <button data-n="4">4</button>
         </div>
         <div class="opt" id="timeSeg" role="group" aria-label="Time Between Photos">
           <span class="optLabel">Time Between Photos</span>
+          <span class="optDiv" aria-hidden="true"></span>
           <button data-t="3">3 Seconds</button>
           <button data-t="5">5 Seconds</button>
           <button data-t="10">10 Seconds</button>
@@ -237,7 +240,7 @@
 <script>
 (() => {
   // ---------- Settings ----------
-  const DEFAULT_COUNT = 5;     // countdown seconds before each photo when the page first opens (3, 5 or 10)
+  const DEFAULT_COUNT = 5;     // which Time Between Photos button starts selected (3, 5 or 10); the countdown always follows the selected button
   const REVIEW_MS    = 3000;   // how long each new photo stays frozen on screen
   const CAPTION_TEXT = '';     // optional text under the photos on each strip (built-in black frame only)
   const DEFAULT_SHOTS = 4;     // 3 or 4 photos per strip when the page first opens
