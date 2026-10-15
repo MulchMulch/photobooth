@@ -352,6 +352,7 @@
       countdownEl.classList.remove('tick');
       countdownEl.innerHTML = '<span>' + i + '</span>';
       void countdownEl.offsetWidth;            // restart animation
+      playTick(i);                             // soft tone at 3, 2, 1
       countdownEl.classList.add('tick');
       await sleep(1000);
     }
@@ -359,7 +360,7 @@
     countdownEl.innerHTML = '';
   }
 
-  // Shutter sound, synthesized with Web Audio (no audio file needed). iOS only allows audio after
+  // Sounds are synthesized with Web Audio (no audio files needed). iOS only allows audio after
   // a tap, so the context is created/resumed when "Start photos" is pressed.
   let audioCtx = null;
   function unlockAudio() {
@@ -368,30 +369,48 @@
       if (audioCtx.state === 'suspended') audioCtx.resume();
     } catch (e) {}
   }
+  function tone(type, f0, f1, t, dur, vol, attack = 0.005) {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+
+  // Cartoony camera flash: a soft "pff" burst, a rising zip, then a sparkly double "ding".
   function playShutter() {
     if (!audioCtx) return;
-    const t0 = audioCtx.currentTime;
-    const click = (t, dur, freq, vol) => {
-      const n = Math.floor(audioCtx.sampleRate * dur);
-      const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
-      const src = audioCtx.createBufferSource(); src.buffer = buf;
-      const bp = audioCtx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = 0.8;
-      const g = audioCtx.createGain(); g.gain.value = vol;
-      src.connect(bp); bp.connect(g); g.connect(audioCtx.destination);
-      src.start(t);
-    };
-    const thump = (t, f0, f1, vol) => {
-      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.type = 'triangle';
-      o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + 0.06);
-      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
-      o.connect(g); g.connect(audioCtx.destination);
-      o.start(t); o.stop(t + 0.08);
-    };
-    click(t0, 0.045, 3200, 1.1);  thump(t0, 220, 90, 0.5);          // shutter opens
-    click(t0 + 0.085, 0.07, 2000, 0.9); thump(t0 + 0.085, 160, 70, 0.4);   // shutter closes
+    const t = audioCtx.currentTime;
+    // "pff" of noise
+    const n = Math.floor(audioCtx.sampleRate * 0.08);
+    const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2);
+    const src = audioCtx.createBufferSource(); src.buffer = buf;
+    const hp = audioCtx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500;
+    const ng = audioCtx.createGain(); ng.gain.value = 0.35;
+    src.connect(hp); hp.connect(ng); ng.connect(audioCtx.destination); src.start(t);
+    // rising zip
+    tone('sine', 380, 1500, t, 0.14, 0.28, 0.01);
+    tone('triangle', 190, 750, t, 0.14, 0.10, 0.01);
+    // sparkly ding (two notes)
+    tone('sine', 1760, 1760, t + 0.13, 0.28, 0.22);
+    tone('sine', 3520, 3520, t + 0.13, 0.16, 0.06);
+    tone('sine', 2349, 2349, t + 0.19, 0.34, 0.20);
+    tone('sine', 4698, 4698, t + 0.19, 0.18, 0.05);
+  }
+
+  // Gentle rising tick for the last three seconds: 3 = C5, 2 = D5, 1 = E5.
+  const TICK_HZ = { 3: 523.25, 2: 587.33, 1: 659.25 };
+  function playTick(sec) {
+    if (!audioCtx || !TICK_HZ[sec]) return;
+    const t = audioCtx.currentTime;
+    tone('sine', TICK_HZ[sec], TICK_HZ[sec], t, 0.45, 0.16, 0.02);
+    tone('sine', TICK_HZ[sec] * 2, TICK_HZ[sec] * 2, t, 0.3, 0.03, 0.02);
   }
 
   function flash() {
