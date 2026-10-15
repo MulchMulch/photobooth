@@ -368,6 +368,19 @@
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
     } catch (e) {}
+    decodeShutter();
+  }
+
+  // Shutter sound file (sounds/shutter.mp3 in the repo). Fetched on page load, decoded once audio is unlocked.
+  const SHUTTER_URL = 'sounds/shutter.mp3';
+  let shutterData = null, shutterBuf = null;
+  fetch(SHUTTER_URL).then(r => r.ok ? r.arrayBuffer() : null)
+    .then(b => { shutterData = b; decodeShutter(); })
+    .catch(() => console.warn('Shutter sound not found, using built-in sound:', SHUTTER_URL));
+  function decodeShutter() {
+    if (!audioCtx || !shutterData || shutterBuf) return;
+    const data = shutterData; shutterData = null;
+    audioCtx.decodeAudioData(data, b => { shutterBuf = b; }, () => console.warn('Could not decode', SHUTTER_URL));
   }
   function tone(type, f0, f1, t, dur, vol, attack = 0.005) {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
@@ -381,8 +394,18 @@
     o.start(t); o.stop(t + dur + 0.02);
   }
 
-  // Cartoony camera flash: a soft "pff" burst, a rising zip, then a sparkly double "ding".
+  // Plays the shutter file; falls back to a built-in synthesized sound if the file isn't available.
   function playShutter() {
+    if (!audioCtx) return;
+    if (!shutterBuf) { playShutterSynth(); return; }
+    const src = audioCtx.createBufferSource();
+    src.buffer = shutterBuf;
+    src.connect(audioCtx.destination);
+    src.start();
+  }
+
+  // Fallback: cartoony flash with a soft "pff" burst, a rising zip, then a sparkly double "ding".
+  function playShutterSynth() {
     if (!audioCtx) return;
     const t = audioCtx.currentTime;
     // "pff" of noise
@@ -404,13 +427,13 @@
     tone('sine', 4698, 4698, t + 0.19, 0.18, 0.05);
   }
 
-  // Gentle rising tick for the last three seconds: 3 = C5, 2 = D5, 1 = E5.
-  const TICK_HZ = { 3: 523.25, 2: 587.33, 1: 659.25 };
+  // Gentle tone for the last three seconds (3, 2, 1), all the same pitch: C5.
+  const TICK_HZ = 523.25;
   function playTick(sec) {
-    if (!audioCtx || !TICK_HZ[sec]) return;
+    if (!audioCtx || sec > 3) return;
     const t = audioCtx.currentTime;
-    tone('sine', TICK_HZ[sec], TICK_HZ[sec], t, 0.45, 0.16, 0.02);
-    tone('sine', TICK_HZ[sec] * 2, TICK_HZ[sec] * 2, t, 0.3, 0.03, 0.02);
+    tone('sine', TICK_HZ, TICK_HZ, t, 0.45, 0.16, 0.02);
+    tone('sine', TICK_HZ * 2, TICK_HZ * 2, t, 0.3, 0.03, 0.02);
   }
 
   function flash() {
