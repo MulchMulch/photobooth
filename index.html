@@ -98,7 +98,21 @@
   #message b { color: var(--text); }
 
   /* ---------- Controls ---------- */
-  #controls { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  #controlsWrap { position: relative; display: flex; justify-content: center; }
+  #controls { display: flex; flex-direction: column; align-items: center; gap: 12px;
+    transition: opacity .2s ease, visibility 0s linear 0s; }
+  /* while photos are being taken: all buttons fade out, the red Stop button fades in */
+  body.shooting #controls { opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity .2s ease, visibility 0s linear .2s; }
+  #stopBtn {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    background: #e5372c; color: #fff; padding: 18px 64px;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity .2s ease, visibility 0s linear .2s, transform .08s;
+  }
+  #stopBtn:active { transform: translate(-50%, -50%) scale(.96); }
+  body.shooting #stopBtn { opacity: 1; visibility: visible; pointer-events: auto;
+    transition: opacity .2s ease, visibility 0s linear 0s, transform .08s; }
   .row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px 14px; }
   #shots { display: flex; gap: 8px; }
   #shots i {
@@ -190,6 +204,7 @@
       <div id="message">Starting camera…<br>Tap <b>Allow</b> when Safari asks for access.</div>
     </div>
     </div>
+    <div id="controlsWrap">
     <div id="controls">
       <div class="row">
         <div class="opt" id="layoutSeg" role="group" aria-label="Photos">
@@ -212,6 +227,8 @@
         <button id="start" disabled>Take Photos</button>
         <div id="shots" aria-hidden="true"></div>
       </div>
+    </div>
+    <button id="stopBtn" aria-label="Stop and go back">Stop</button>
     </div>
   </div>
 
@@ -366,17 +383,20 @@
     return c;
   }
 
-  async function countdown(n) {
+  async function countdown(n, id) {
     for (let i = n; i >= 1; i--) {
+      if (id !== sessionId) return false;
       countdownEl.classList.remove('tick');
       countdownEl.innerHTML = '<span>' + i + '</span>';
       void countdownEl.offsetWidth;            // restart animation
       playTick(i);                             // soft tone at 3, 2, 1
       countdownEl.classList.add('tick');
       await sleep(1000);
+      if (id !== sessionId) return false;          // Stop was pressed
     }
     countdownEl.classList.remove('tick');
     countdownEl.innerHTML = '';
+    return true;
   }
 
   // Sounds are synthesized with Web Audio (no audio files needed). iOS only allows audio after
@@ -392,7 +412,7 @@
 
   // Shutter sound file (sounds/shutter.mp3 in the repo). Fetched on page load, decoded once audio is unlocked.
   const SHUTTER_URL = 'sounds/shutter.mp3';
-  let shutterData = null, shutterBuf = null;
+  let shutterData = null, shutterBuf = null, shutterSrc = null;
   fetch(SHUTTER_URL).then(r => r.ok ? r.arrayBuffer() : null)
     .then(b => { shutterData = b; decodeShutter(); })
     .catch(() => console.warn('Shutter sound not found, using built-in sound:', SHUTTER_URL));
@@ -421,6 +441,7 @@
     src.buffer = shutterBuf;
     src.connect(audioCtx.destination);
     src.start();
+    shutterSrc = src;
   }
 
   // Fallback: cartoony flash with a soft "pff" burst, a rising zip, then a sparkly double "ding".
@@ -463,14 +484,16 @@
 
   function setBusy(b) {
     busy = b;
-    startBtn.disabled = b; flipBtn.disabled = b; frameBtn.disabled = b;
-    segBtns.forEach(x => x.disabled = b);
-    timeBtns.forEach(x => x.disabled = b);
+    document.body.classList.toggle('shooting', b);   // fades the buttons out and the Stop button in
   }
+
+  let sessionId = 0;   // bumped by Stop; a running session sees the change and quits
 
   async function runSession() {
     if (busy) return;
     unlockAudio();
+    const my = ++sessionId;
+    const cancelled = () => my !== sessionId;
     setBusy(true);
     const total = shots;
     dots().forEach(d => d.classList.remove('done'));
@@ -479,7 +502,7 @@
     const photos = [];
     for (let i = 0; i < total; i++) {
       statusEl.textContent = 'Photo ' + (i + 1) + ' of ' + total;
-      await countdown(countSecs);
+      if (!(await countdown(countSecs, my))) return;
       const frame = grabFrame();
       photos.push(frame);
       freezeEl.src = frame.toDataURL('image/jpeg', 0.9);
@@ -488,17 +511,33 @@
       playShutter();
       dots()[i].classList.add('done');
       await sleep(REVIEW_MS);
+      if (cancelled()) return;
       freezeEl.classList.add('hidden');
     }
     statusEl.classList.add('hidden');
     lastPhotos = photos;
     flashEl.classList.remove('go');
     await renderResult();
+    if (cancelled()) return;
     booth.classList.add('hidden');
     result.classList.remove('hidden');
     setBusy(false);
     startBtn.disabled = !stream;
   }
+
+  // Stop: abort the session and return to the main screen (buttons fade back in).
+  function stopSession() {
+    if (!busy) return;
+    sessionId++;                                   // makes the running session quit
+    if (shutterSrc) { try { shutterSrc.stop(); } catch (e) {} shutterSrc = null; }
+    countdownEl.classList.remove('tick'); countdownEl.innerHTML = '';
+    flashEl.classList.remove('go');
+    freezeEl.classList.add('hidden');
+    statusEl.classList.add('hidden');
+    dots().forEach(d => d.classList.remove('done'));
+    setBusy(false);
+  }
+  $('stopBtn').addEventListener('click', stopSession);
 
   // ---------- Photos-per-strip toggle ----------
   function setShots(n) {
