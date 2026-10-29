@@ -60,6 +60,7 @@
     object-fit: cover; background: #000;
   }
   #video.mirror { transform: scaleX(-1); }
+  #video.bw { filter: grayscale(1); }          /* B&W mode preview */
   #freeze {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover; background: #000;
@@ -245,6 +246,12 @@
           <button data-t="5">5 Seconds</button>
           <button data-t="10">10 Seconds</button>
         </div>
+        <div class="opt" id="modeSeg" role="group" aria-label="Mode">
+          <span class="optLabel">Mode</span>
+          <span class="optDiv" aria-hidden="true"></span>
+          <button data-m="color">Color</button>
+          <button data-m="bw">B&amp;W</button>
+        </div>
       </div>
       <div class="row">
         <button id="flip" class="secondary" aria-label="Flip camera" title="Flip camera"><img src="icons/flip.png" alt=""></button>
@@ -348,6 +355,7 @@
   const countdownEl = $('countdown'), flashEl = $('flash'), statusEl = $('status'), messageEl = $('message');
   const shotsEl = $('shots'), segBtns = [...document.querySelectorAll('#layoutSeg button')];
   const timeBtns = [...document.querySelectorAll('#timeSeg button')];
+  const modeBtns = [...document.querySelectorAll('#modeSeg button')];
   const booth = $('booth'), result = $('result');
   const resultImg = $('resultImg'), freezeEl = $('freeze');
   const frameBtn = $('frameBtn'), resultFrameBtn = $('resultFrameBtn');
@@ -355,7 +363,7 @@
   const dots = () => [...shotsEl.querySelectorAll('i')].slice(0, shots);   // the dots in use
 
   let stream = null, facing = 'user', busy = false;
-  let shots = DEFAULT_SHOTS, countSecs = DEFAULT_COUNT;
+  let shots = DEFAULT_SHOTS, countSecs = DEFAULT_COUNT, mode = 'color';   // mode: 'color' or 'bw'
   let frames = [FRAME_CONFIG[0]], selected = frames[0];
   let lastPhotos = null, renderId = 0;
   let finalBlob = null, finalUrl = null, pdfFile = null, pdfUrl = null;
@@ -414,6 +422,14 @@
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     if (facing === 'user') { ctx.translate(CAPTURE_W, 0); ctx.scale(-1, 1); }
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, CAPTURE_W, CAPTURE_H);
+    if (mode === 'bw') {                                  // black & white: convert pixel by pixel
+      const img = ctx.getImageData(0, 0, CAPTURE_W, CAPTURE_H), d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const g = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0;
+        d[i] = d[i + 1] = d[i + 2] = g;
+      }
+      ctx.putImageData(img, 0, 0);
+    }
     return c;
   }
 
@@ -583,6 +599,15 @@
     updateFrameUI();
   }
   segBtns.forEach(b => b.addEventListener('click', () => { if (!busy) setShots(Number(b.dataset.n)); }));
+
+  // ---------- Mode: color or black & white ----------
+  function setMode(m) {
+    mode = m;
+    store.set('photobooth-mode', m);
+    modeBtns.forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    video.classList.toggle('bw', m === 'bw');          // live preview matches the photos
+  }
+  modeBtns.forEach(b => b.addEventListener('click', () => { if (!busy) setMode(b.dataset.m); }));
 
   // ---------- Time between photos (countdown length) ----------
   function setCount(t) {
@@ -841,6 +866,7 @@
   setShots(savedShots === 3 || savedShots === 4 ? savedShots : DEFAULT_SHOTS);
   const savedCount = Number(store.get('photobooth-count'));
   setCount([3, 5, 10].includes(savedCount) ? savedCount : DEFAULT_COUNT);
+  setMode(store.get('photobooth-mode') === 'bw' ? 'bw' : 'color');
   startCamera();
   loadFrames().then(list => {
     frames = list;
