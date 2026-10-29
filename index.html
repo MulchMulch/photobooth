@@ -12,11 +12,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #131316;
+    --bg: #4F1111;
     --panel: #1d1d22;
     --text: #f4f4f6;
     --muted: #9a9aa5;
-    --bulb: #ffcf3f;
+    --bulb: #E09120;
     --bulb-ink: #1a1400;
     --header-h: 0px;                   /* measured from the header image at runtime */
     --stage-h: calc(100dvh - 240px - var(--header-h));   /* height reserved for the preview, whatever its shape */
@@ -37,11 +37,11 @@
   }
   #header {
     flex: 0 0 auto; width: 100%;
-    background: #f4f4f6; border-bottom: 1px solid #d9d9df;   /* light band so the black script reads clearly */
-    display: flex; justify-content: center; padding: 8px 16px;
+    display: flex; justify-content: center; padding: 8px 16px;   /* transparent: no banner behind the image */
+    pointer-events: none;
   }
   #header[hidden] { display: none; }
-  #headerImg { display: block; width: min(100%, 680px); aspect-ratio: 1174 / 129; height: auto; }
+  #headerImg { position: relative; z-index: 1; display: block; width: min(100%, 680px); aspect-ratio: 1174 / 129; height: auto; }
   #app {
     flex: 1 1 auto; min-height: 0; width: 100%;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -912,6 +912,29 @@
   if (window.ResizeObserver) new ResizeObserver(syncHeader).observe(headerEl);
   window.addEventListener('resize', syncHeader);
   syncHeader();
+
+  // Centre the header image vertically between the top of the page and the top of the main
+  // content (the camera preview frame, or the finished strip on the result screen).
+  const headerImg = $('headerImg');
+  function placeHeader() {
+    if (headerEl.hidden) return;
+    const onBooth = !booth.classList.contains('hidden');
+    const ref = (onBooth ? $('stage') : resultImg).getBoundingClientRect();
+    if (!ref.height) return;
+    const frameTop = ref.top - (onBooth ? 8 : 0);                  // 8px = the ring around the preview
+    const h = headerImg.offsetHeight;
+    const hb = headerEl.getBoundingClientRect();
+    const naturalTop = hb.top + (headerEl.offsetHeight - h) / 2;   // where the image sits without any shift
+    const shift = Math.max(0, (frameTop - h) / 2 - naturalTop);
+    headerImg.style.transform = 'translateY(' + shift.toFixed(1) + 'px)';
+  }
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(placeHeader);
+    [headerEl, $('stage'), resultImg, $('app')].forEach(el => ro.observe(el));
+  }
+  window.addEventListener('resize', placeHeader);
+  headerImg.addEventListener('load', placeHeader);
+  placeHeader();
 
   // ---------- No zoom, no scrolling ----------
   // Safari ignores user-scalable=no, so block pinch, double-tap zoom and page panning directly.
