@@ -18,13 +18,15 @@
     --muted: #9a9aa5;
     --bulb: #ffcf3f;
     --bulb-ink: #1a1400;
-    --stage-h: calc(100dvh - 240px);   /* height reserved for the preview, whatever its shape */
+    --header-h: 0px;                   /* measured from the header image at runtime */
+    --stage-h: calc(100dvh - 240px - var(--header-h));   /* height reserved for the preview, whatever its shape */
     --font: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; margin: 0; overscroll-behavior: none; touch-action: none; -webkit-text-size-adjust: 100%; }
   body {
     position: fixed; inset: 0; width: 100%;
+    display: flex; flex-direction: column;
     background: var(--bg);
     color: var(--text);
     font-family: var(--font);
@@ -33,8 +35,15 @@
     overflow: hidden;
     padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   }
+  #header {
+    flex: 0 0 auto; width: 100%;
+    background: #f4f4f6; border-bottom: 1px solid #d9d9df;   /* light band so the black script reads clearly */
+    display: flex; justify-content: center; padding: 8px 16px;
+  }
+  #header[hidden] { display: none; }
+  #headerImg { display: block; width: min(100%, 680px); aspect-ratio: 1174 / 129; height: auto; }
   #app {
-    height: 100%;
+    flex: 1 1 auto; min-height: 0; width: 100%;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 16px; padding: 16px;
   }
@@ -178,7 +187,7 @@
   /* ---------- Print instructions (side panel, stays visible behind the iPad print screen) ---------- */
   :root { --help-w: clamp(150px, 15vw, 200px); }
   #printHelp {
-    position: fixed; right: 10px; top: 50%; transform: translateY(-50%); z-index: 3;
+    position: fixed; right: 10px; top: calc(50% + var(--header-h) / 2); transform: translateY(-50%); z-index: 3;
     width: var(--help-w);
     background: var(--panel); border: 1px solid #34343c; border-radius: 16px;
     padding: 14px 12px 12px;
@@ -201,7 +210,7 @@
   /* ---------- Result ---------- */
   #result { height: 100%; width: 100%; display: flex; align-items: center; justify-content: center; gap: 32px; flex-wrap: wrap; }
   #resultImg {
-    height: min(calc(100dvh - 40px), 90vw * 1.48);
+    height: min(calc(100dvh - 40px - var(--header-h)), 90vw * 1.48);
     aspect-ratio: 100 / 148;
     border-radius: 4px; box-shadow: 0 10px 40px rgba(0,0,0,.6);
     -webkit-user-select: auto; user-select: auto;
@@ -210,12 +219,14 @@
   #resultSide { display: flex; flex-direction: column; gap: 12px; align-items: stretch; min-width: 220px; }
   @media (max-aspect-ratio: 1/1) {
     #result { flex-direction: column; gap: 16px; }
-    #resultImg { height: min(65dvh, 90vw * 1.48); }
+    #resultImg { height: min(calc((100dvh - var(--header-h)) * .65), 90vw * 1.48); }
     #resultSide { flex-direction: row; flex-wrap: wrap; justify-content: center; }
   }
 </style>
 </head>
 <body>
+
+<header id="header"><img id="headerImg" src="icons/header.png" alt="Ian and Marissa’s Photo Booth"></header>
 
 <div id="app">
   <!-- Booth -->
@@ -270,10 +281,10 @@
     <div id="resultSide">
       <button id="printBtn">Print</button>
       <button id="resultFrameBtn" class="secondary hidden">Change Frame</button>
-      <button id="resultFilterBtn" class="secondary">Change Filter</button>
+      <button id="resultFilterBtn" class="secondary">Toggle B&amp;W</button>
       <button id="shareBtn" class="secondary">Save / Share</button>
-      <a id="downloadLink" class="hidden" download="photobooth.jpg"></a>
-      <button id="againBtn" class="secondary">Take New Photos</button>
+      <a id="downloadLink" class="hidden" download="photobooth-strip.jpg"></a>
+      <button id="againBtn">Take New Photos</button>
     </div>
     <div id="printHelp" class="hidden" aria-live="polite">
       <h3>To Print</h3>
@@ -366,8 +377,9 @@
   let stream = null, facing = 'user', busy = false;
   let shots = DEFAULT_SHOTS, countSecs = DEFAULT_COUNT, mode = 'color';   // mode: 'color' or 'bw'
   let frames = [FRAME_CONFIG[0]], selected = frames[0];
-  let lastPhotos = null, resultBW = false, renderId = 0;   // lastPhotos are always color; resultBW applies the B&W filter
-  let finalBlob = null, finalUrl = null, pdfFile = null, pdfUrl = null;
+  let lastPhotos = null, sessionPhotos = null, resultBW = false, renderId = 0;   // lastPhotos are always color; resultBW applies the B&W filter
+  let finalBlob = null, finalUrl = null, pdfFile = null, pdfUrl = null;   // finalBlob = the 2-strip sheet shown + printed
+  let stripBlob = null, stripUrl = null;                                   // a single strip, used by Save / Share
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const store = {
@@ -546,6 +558,7 @@
     statusEl.classList.remove('hidden');
 
     const photos = [];
+    sessionPhotos = photos;                        // so Cancel can wipe them
     for (let i = 0; i < total; i++) {
       statusEl.textContent = 'Photo ' + (i + 1) + ' of ' + total;
       if (!(await countdown(countSecs, my))) return;
@@ -583,6 +596,7 @@
     freezeEl.classList.add('hidden');
     statusEl.classList.add('hidden');
     dots().forEach(d => d.classList.remove('done'));
+    wipeResult();                                  // discard photos taken so far
     setBusy(false);
   }
   $('cancelBtn').addEventListener('click', cancelSession);
@@ -666,6 +680,23 @@
     return sheet;
   }
 
+  // ---------- Wiping photos from memory ----------
+  const freeCanvases = list => (list || []).forEach(c => { c.width = 0; c.height = 0; });
+
+  // Drops every photo, the finished strip and the print PDF so nothing is kept in memory.
+  function wipeResult() {
+    renderId++;                                    // cancels any render still in progress
+    if (finalUrl) URL.revokeObjectURL(finalUrl);
+    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    if (stripUrl) URL.revokeObjectURL(stripUrl);
+    finalUrl = pdfUrl = stripUrl = null; finalBlob = pdfFile = stripBlob = null;
+    resultImg.removeAttribute('src');
+    $('downloadLink').removeAttribute('href');
+    freezeEl.removeAttribute('src');
+    freeCanvases(lastPhotos); freeCanvases(sessionPhotos);
+    lastPhotos = sessionPhotos = null;
+  }
+
   // Black & white copy of a photo canvas.
   function toGray(src) {
     const c = document.createElement('canvas');
@@ -685,18 +716,29 @@
   async function renderResult() {
     const id = ++renderId;
     const photos = resultBW ? lastPhotos.map(toGray) : lastPhotos;
-    const sheet = composeSheet(photos, frameFor(lastPhotos.length));
+    const frame = frameFor(lastPhotos.length);
+    const sheet = composeSheet(photos, frame);
     const blob = await new Promise(res => sheet.toBlob(res, 'image/jpeg', 0.95));
+    sheet.width = sheet.height = 0;                // release the temporary canvas
+    // one single strip (not two side by side) for Save / Share
+    const strip = document.createElement('canvas');
+    strip.width = STRIP_W; strip.height = STRIP_H;
+    drawStrip(strip.getContext('2d'), 0, photos, frame, photos.length);
+    const sBlob = await new Promise(res => strip.toBlob(res, 'image/jpeg', 0.95));
+    strip.width = strip.height = 0;
+    if (resultBW) freeCanvases(photos);            // release the temporary grayscale copies
     const pdf = new File([await makePdf(blob)], 'photobooth-print.pdf', { type: 'application/pdf' });
     if (id !== renderId) return;                    // a newer render superseded this one
 
     if (finalUrl) URL.revokeObjectURL(finalUrl);
     if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-    finalBlob = blob; pdfFile = pdf;
+    if (stripUrl) URL.revokeObjectURL(stripUrl);
+    finalBlob = blob; pdfFile = pdf; stripBlob = sBlob;
     finalUrl = URL.createObjectURL(blob);
     pdfUrl = URL.createObjectURL(pdf);
-    resultImg.src = finalUrl;
-    $('downloadLink').href = finalUrl;
+    stripUrl = URL.createObjectURL(sBlob);
+    resultImg.src = finalUrl;                      // preview = the 2-strip print sheet
+    $('downloadLink').href = stripUrl;             // download fallback = one strip
   }
 
   // ---------- Print PDF ----------
@@ -837,8 +879,8 @@
   });
 
   $('shareBtn').addEventListener('click', async () => {
-    if (!finalBlob) return;
-    const file = new File([finalBlob], 'photobooth.jpg', { type: 'image/jpeg' });
+    if (!stripBlob) return;
+    const file = new File([stripBlob], 'photobooth-strip.jpg', { type: 'image/jpeg' });   // a single strip
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: 'Photobooth' }); return; }
       catch (e) { if (e && e.name === 'AbortError') return; }
@@ -853,10 +895,23 @@
     result.classList.add('hidden');
     booth.classList.remove('hidden');
     dots().forEach(d => d.classList.remove('done'));
-    lastPhotos = null;
+    wipeResult();                                  // finished strip + photos are discarded
     updateFrameUI();
     if (!stream) startCamera(); else startBtn.disabled = false;
   });
+
+  // Leaving, closing or refreshing the page also drops everything. (Nothing is ever written to
+  // storage, so the browser frees the memory too; this just makes it explicit.)
+  window.addEventListener('pagehide', wipeResult);
+  window.addEventListener('pageshow', e => { if (e.persisted) location.reload(); });   // restored from back/forward cache: start clean
+
+  // ---------- Header ----------
+  const headerEl = $('header');
+  const syncHeader = () => document.documentElement.style.setProperty('--header-h', (headerEl.hidden ? 0 : headerEl.offsetHeight) + 'px');
+  $('headerImg').addEventListener('error', () => { headerEl.hidden = true; syncHeader(); });   // no image => no header
+  if (window.ResizeObserver) new ResizeObserver(syncHeader).observe(headerEl);
+  window.addEventListener('resize', syncHeader);
+  syncHeader();
 
   // ---------- No zoom, no scrolling ----------
   // Safari ignores user-scalable=no, so block pinch, double-tap zoom and page panning directly.
