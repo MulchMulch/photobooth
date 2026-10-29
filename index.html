@@ -13,13 +13,15 @@
 <style>
   :root {
     --bg: #4F1111;
-    --panel: #252525;
+    --panel: #141414;
     --text: #F2F0EF;
     --muted: #9a9aa5;
     --bulb: #E09120;
-    --bulb-ink: #252525;
-    --header-h: 0px;                   /* measured from the header image at runtime */
-    --stage-h: calc(100dvh - 240px - var(--header-h));   /* height reserved for the preview, whatever its shape */
+    --bulb-ink: #141414;
+    --G: clamp(14px, 3.4dvh, 40px);    /* the one gap used above the header, below it, and around the preview */
+    --header-h: calc(var(--G) * 2 + 75px);   /* header image + its margins; measured at runtime */
+    --controls-h: 116px;               /* height of the button area; measured at runtime */
+    --stage-h: calc(100dvh - var(--header-h) - var(--controls-h) - 2 * var(--G));   /* area for the preview + its outline */
     --font: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -37,15 +39,15 @@
   }
   #header {
     flex: 0 0 auto; width: 100%;
-    display: flex; justify-content: center; padding: 8px 16px;   /* transparent: no banner behind the image */
+    display: flex; justify-content: center; padding: 0 16px; margin: var(--G) 0;   /* transparent: no banner behind the image */
     pointer-events: none;
   }
   #header[hidden] { display: none; }
   #headerImg { position: relative; z-index: 1; display: block; width: min(100%, 680px); aspect-ratio: 1174 / 129; height: auto; }
   #app {
     flex: 1 1 auto; min-height: 0; width: 100%;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 16px; padding: 16px;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: var(--G); padding: 0 16px;
   }
   .hidden { display: none !important; }
 
@@ -58,21 +60,22 @@
     position: relative;
     --ar: 1.3333;                      /* set from the selected frame's photo window */
     aspect-ratio: var(--ar);
-    width: min(100%, calc(var(--stage-h) * var(--ar)));
-    background: #252525;
+    margin: 6px;                                       /* room for the 6px outline inside the area */
+    width: min(calc(100% - 12px), calc((var(--stage-h) - 12px) * var(--ar)));
+    background: #141414;
     border-radius: 20px;
     overflow: hidden;
     box-shadow: 0 0 0 6px #F2F0EF;                       /* white outline */
   }
   #video {
     position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: cover; background: #252525;
+    object-fit: cover; background: #141414;
   }
   #video.mirror { transform: scaleX(-1); }
   #video.bw, #freeze.bw { filter: grayscale(1); }   /* B&W mode: live preview + frozen photo */
   #freeze {
     position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: cover; background: #252525;
+    object-fit: cover; background: #141414;
   }
 
   #countdown {
@@ -103,7 +106,7 @@
   #message {
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     text-align: center; padding: 24px; font-size: 18px; line-height: 1.4; color: var(--muted);
-    background: #252525;
+    background: #141414;
   }
   #message b { color: var(--text); }
 
@@ -136,20 +139,21 @@
   button:active { transform: scale(.96); }
   button:disabled { opacity: .35; cursor: default; }
   button:focus-visible { outline: 3px solid #F2F0EF; outline-offset: 3px; }
-  button.secondary { background: #F2F0EF; color: #252525; font-weight: 500; font-size: 17px; padding: 14px 24px; border: 1px solid transparent; }
+  button.secondary { background: #F2F0EF; color: #141414; font-weight: 500; font-size: 17px; padding: 14px 24px; border: 1px solid transparent; }
   #flip { padding: 11px 16px; line-height: 0; }
-  #flip img { width: 32px; height: 32px; display: block; filter: brightness(0) invert(.145); }   /* #252525, to show on the light button */
-  #frameBtn { width: 300px; white-space: nowrap; }   /* width is set from the longest frame name at runtime */
+  #flip img { width: 32px; height: 32px; display: block; filter: brightness(0) invert(.078); }   /* #141414, to show on the light button */
+  #frameBtn { width: 300px; white-space: nowrap; }
+  #frameBtn b { font-weight: 800; }   /* width is set from the longest frame name at runtime */
 
   /* option groups: label + choices */
   .opt {
     display: flex; align-items: center; gap: 6px;
     background: #F2F0EF; border: 1px solid transparent; border-radius: 999px; padding: 4px 4px 4px 18px;
   }
-  .optLabel { color: #252525; font-size: 16px; font-weight: 500; white-space: nowrap; }
+  .optLabel { color: #141414; font-size: 16px; font-weight: 800; white-space: nowrap; }
   .optDiv { width: 1px; height: 24px; background: #b9b9c2; margin: 0 8px 0 6px; flex: 0 0 auto; }
   .opt button {
-    background: transparent; color: #252525; font-weight: 500; font-size: 16px; padding: 10px 16px; border-radius: 999px;
+    background: transparent; color: #141414; font-weight: 500; font-size: 16px; padding: 10px 16px; border-radius: 999px;
   }
   .opt button.on { background: var(--bulb); color: var(--bulb-ink); font-weight: 800; }
 
@@ -174,7 +178,7 @@
     padding: 8px; border-radius: 14px; border: 3px solid transparent;
     display: flex; flex-direction: column; align-items: center; gap: 8px;
   }
-  .frameItem canvas { width: 90px; height: auto; border-radius: 3px; background: #252525; display: block; }
+  .frameItem canvas { width: 90px; height: auto; border-radius: 3px; background: #141414; display: block; }
   .frameItem.selected { border-color: var(--bulb); }
 
   /* ---------- Print instructions (side panel, stays visible behind the iPad print screen) ---------- */
@@ -201,7 +205,7 @@
   #printHelp b { font-weight: 800; }
 
   /* ---------- Result ---------- */
-  #result { height: 100%; width: 100%; display: flex; align-items: center; justify-content: center; gap: 32px; flex-wrap: wrap; }
+  #result { height: 100%; width: 100%; display: flex; align-items: center; justify-content: center; gap: 64px; flex-wrap: wrap; }
   #resultImg {
     height: calc(min(calc(100dvh - 40px - var(--header-h)), 90vw * 1.48) * .9);   /* preview shown 10% smaller; the saved/printed image is unchanged */
     aspect-ratio: 100 / 148;
@@ -212,7 +216,7 @@
   #resultSide { display: flex; flex-direction: column; gap: 12px; align-items: stretch; min-width: 220px; }
   #againBtn { margin-top: 38px; }   /* with the 12px gap = one button's height of space above Take New Photos */
   @media (max-aspect-ratio: 1/1) {
-    #result { flex-direction: column; gap: 16px; }
+    #result { flex-direction: column; gap: 32px; }
     #againBtn { margin-top: 0; }
     #resultImg { height: calc(min(calc((100dvh - var(--header-h)) * .65), 90vw * 1.48) * .9); }
     #resultSide { flex-direction: row; flex-wrap: wrap; justify-content: center; }
@@ -347,9 +351,11 @@
   //   overlay: true/false – override the png/jpg rule above
   //   slots:   { 3: [{x,y,w,h},…3], 4: [{x,y,w,h},…4] } – your own photo windows
   // A file that can't be loaded is skipped automatically.
+  // Plain-colour frames need no files: give an entry bg (the colour), and optionally fg (caption text
+  // colour) and guide (the faint cut line between the two strips), like Classic Black / Classic White.
   const FRAME_CONFIG = [
-    { id: 'black',  name: 'Classic Black' },                       // built in, no file needed
-    { id: 'white',  name: 'Classic White', files: { 3: 'frames/white-3.png', 4:'frames/white-4.png'}},
+    { id: 'black',  name: 'Classic Black', bg: '#141414', fg: '#F2F0EF', guide: '#2a2a2a' },   // built in, no file needed
+    { id: 'white',  name: 'Classic White', bg: '#F2F0EF', fg: '#141414', guide: '#d8d5d3' },   // built in, no file needed
     { id: 'pixel',   name: 'Halloween Pixel', files: { 3: 'frames/pixel-3.png', 4:'frames/pixel-4.png'}},
     { id: 'web', name: 'Halloween Web', files: { 3: 'frames/web-3.png', 4:'frames/web-4.png'}},
     // { id: 'party', name: 'Party', files: { 3: 'frames/party-3.png', 4: 'frames/party-4.png' } },
@@ -637,7 +643,7 @@
   function drawStrip(ctx, x0, photos, frame, count) {
     const slots = (frame.slots && frame.slots[count]) || LAYOUTS[count];
     const art = frame.art && frame.art[count];
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = frame.bg || '#141414';           // built-in frames set their own colour
     ctx.fillRect(x0, 0, STRIP_W, STRIP_H);
     if (art && !art.overlay) ctx.drawImage(art.img, x0, 0, STRIP_W, STRIP_H);     // background art
     slots.forEach((s, i) => {
@@ -648,7 +654,7 @@
     if (!art && CAPTION_TEXT && photos) {
       const last = slots[slots.length - 1];
       const yCap = last.y + last.h + (STRIP_H - last.y - last.h) / 2;
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = frame.fg || '#F2F0EF';
       ctx.font = '600 28px -apple-system, Helvetica, Arial, sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(CAPTION_TEXT, x0 + STRIP_W / 2, yCap);
@@ -663,7 +669,7 @@
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     drawStrip(ctx, 0, photos, frame, photos.length);
     drawStrip(ctx, STRIP_W, photos, frame, photos.length);
-    ctx.fillStyle = '#2a2a2a';                      // faint cut guide
+    ctx.fillStyle = frame.guide || '#2a2a2a';       // faint cut guide
     ctx.fillRect(STRIP_W - 1, 0, 2, SHEET_H);
     return sheet;
   }
@@ -815,9 +821,12 @@
   function sizeFrameBtn() {
     const cs = getComputedStyle(frameBtn);
     const ctx = document.createElement('canvas').getContext('2d');
-    ctx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+    const font = cs.fontSize + ' ' + cs.fontFamily;
+    ctx.font = '800 ' + font;                                   // "Frame:" is bold
+    const labelW = ctx.measureText('Frame:').width;
+    ctx.font = cs.fontWeight + ' ' + font;
     let w = 0;
-    frames.forEach(f => { w = Math.max(w, ctx.measureText('Frame: ' + f.name).width); });
+    frames.forEach(f => { w = Math.max(w, labelW + ctx.measureText(' ' + f.name).width); });
     const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
     frameBtn.style.width = Math.ceil(w + pad + 8) + 'px';
   }
@@ -826,7 +835,9 @@
     applyPreviewAspect();
     const multi = availableFrames(shots).length > 1;
     frameBtn.classList.toggle('hidden', !multi);
-    frameBtn.textContent = 'Frame: ' + frameFor(shots).name;
+    frameBtn.textContent = '';
+    const lab = document.createElement('b'); lab.textContent = 'Frame:';
+    frameBtn.append(lab, ' ' + frameFor(shots).name);
     const rc = lastPhotos ? lastPhotos.length : shots;
     resultFrameBtn.classList.toggle('hidden', availableFrames(rc).length < 2);
   }
@@ -906,18 +917,28 @@
 
   // ---------- Header ----------
   const headerEl = $('header');
-  const syncHeader = () => document.documentElement.style.setProperty('--header-h', (headerEl.hidden ? 0 : headerEl.offsetHeight) + 'px');
+  const rootStyle = document.documentElement.style;
+  const syncHeader = () => {                       // header height including the gap above and below it
+    const cs = getComputedStyle(headerEl);
+    const h = headerEl.hidden ? 0 : headerEl.offsetHeight + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
+    rootStyle.setProperty('--header-h', h + 'px');
+  };
+  const syncControls = () => rootStyle.setProperty('--controls-h', $('controls').offsetHeight + 'px');
+  if (window.ResizeObserver) new ResizeObserver(syncControls).observe($('controls'));
+  window.addEventListener('resize', syncControls);
+  syncControls();
   $('headerImg').addEventListener('error', () => { headerEl.hidden = true; syncHeader(); });   // no image => no header
   if (window.ResizeObserver) new ResizeObserver(syncHeader).observe(headerEl);
   window.addEventListener('resize', syncHeader);
   syncHeader();
 
-  // Centre the header image vertically between the top of the page and the top of the main
-  // content (the camera preview frame, or the finished strip on the result screen).
+  // On the result screen, centre the header vertically between the top of the page and the top of
+  // the finished strip. (The camera screen uses the even spacing built into the layout.)
   const headerImg = $('headerImg');
   function placeHeader() {
     if (headerEl.hidden) return;
     const onBooth = !booth.classList.contains('hidden');
+    if (onBooth) { headerImg.style.transform = ''; return; }   // camera screen: plain even spacing from the layout itself
     const ref = (onBooth ? $('stage') : resultImg).getBoundingClientRect();
     if (!ref.height) return;
     const frameTop = ref.top - (onBooth ? 6 : 0);                  // 6px = the white outline around the preview
