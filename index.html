@@ -60,7 +60,7 @@
     object-fit: cover; background: #000;
   }
   #video.mirror { transform: scaleX(-1); }
-  #video.bw { filter: grayscale(1); }          /* B&W mode preview */
+  #video.bw, #freeze.bw { filter: grayscale(1); }   /* B&W mode: live preview + frozen photo */
   #freeze {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover; background: #000;
@@ -270,6 +270,7 @@
     <div id="resultSide">
       <button id="printBtn">Print</button>
       <button id="resultFrameBtn" class="secondary hidden">Change Frame</button>
+      <button id="resultFilterBtn" class="secondary">Change Filter</button>
       <button id="shareBtn" class="secondary">Save / Share</button>
       <a id="downloadLink" class="hidden" download="photobooth.jpg"></a>
       <button id="againBtn" class="secondary">Take New Photos</button>
@@ -328,7 +329,7 @@
     4: stack(4, 40,  60, 520, 347, 24),
   };
 
-  const CAPTURE_W = 1080, CAPTURE_H = 810;   // stored photo size (4:3), cropped again per window
+  const CAPTURE_W = 1080;   // stored photo width; its height follows the photo window's shape (same as the live preview)
 
   // ---------- Frames ----------
   // Custom frames are images stored in the repo, one per layout (3 and 4 photos), because the
@@ -365,7 +366,7 @@
   let stream = null, facing = 'user', busy = false;
   let shots = DEFAULT_SHOTS, countSecs = DEFAULT_COUNT, mode = 'color';   // mode: 'color' or 'bw'
   let frames = [FRAME_CONFIG[0]], selected = frames[0];
-  let lastPhotos = null, renderId = 0;
+  let lastPhotos = null, resultBW = false, renderId = 0;   // lastPhotos are always color; resultBW applies the B&W filter
   let finalBlob = null, finalUrl = null, pdfFile = null, pdfUrl = null;
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -411,7 +412,10 @@
   // Grab the current video frame, center-cropped to 4:3, mirrored if front camera.
   function grabFrame() {
     const vw = video.videoWidth, vh = video.videoHeight;
-    const target = CAPTURE_W / CAPTURE_H;
+    // Crop the camera image exactly as the live preview does (same shape as the photo window),
+    // so what you see during the countdown is what ends up on the strip.
+    const target = previewAspect();
+    const CAPTURE_H = Math.round(CAPTURE_W / target);
     let sx = 0, sy = 0, sw = vw, sh = vh;
     if (vw / vh > target) { sw = vh * target; sx = (vw - sw) / 2; }
     else                  { sh = vw / target; sy = (vh - sh) / 2; }
@@ -422,14 +426,6 @@
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     if (facing === 'user') { ctx.translate(CAPTURE_W, 0); ctx.scale(-1, 1); }
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, CAPTURE_W, CAPTURE_H);
-    if (mode === 'bw') {                                  // black & white: convert pixel by pixel
-      const img = ctx.getImageData(0, 0, CAPTURE_W, CAPTURE_H), d = img.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const g = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0;
-        d[i] = d[i + 1] = d[i + 2] = g;
-      }
-      ctx.putImageData(img, 0, 0);
-    }
     return c;
   }
 
@@ -556,6 +552,7 @@
       const frame = grabFrame();
       photos.push(frame);
       freezeEl.src = frame.toDataURL('image/jpeg', 0.9);
+      freezeEl.classList.toggle('bw', mode === 'bw');
       freezeEl.classList.remove('hidden');   // freeze on the photo just taken
       flash();
       playShutter();
@@ -566,6 +563,7 @@
     }
     statusEl.classList.add('hidden');
     lastPhotos = photos;
+    resultBW = (mode === 'bw');                    // start with the mode chosen on the main screen
     flashEl.classList.remove('go');
     await renderResult();
     if (cancelled()) return;
@@ -668,10 +666,26 @@
     return sheet;
   }
 
+  // Black & white copy of a photo canvas.
+  function toGray(src) {
+    const c = document.createElement('canvas');
+    c.width = src.width; c.height = src.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(src, 0, 0);
+    const img = ctx.getImageData(0, 0, c.width, c.height), d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const g = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0;
+      d[i] = d[i + 1] = d[i + 2] = g;
+    }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  }
+
   // Build the sheet from lastPhotos + the chosen frame, and refresh the image and PDF.
   async function renderResult() {
     const id = ++renderId;
-    const sheet = composeSheet(lastPhotos, frameFor(lastPhotos.length));
+    const photos = resultBW ? lastPhotos.map(toGray) : lastPhotos;
+    const sheet = composeSheet(photos, frameFor(lastPhotos.length));
     const blob = await new Promise(res => sheet.toBlob(res, 'image/jpeg', 0.95));
     const pdf = new File([await makePdf(blob)], 'photobooth-print.pdf', { type: 'application/pdf' });
     if (id !== renderId) return;                    // a newer render superseded this one
@@ -758,9 +772,12 @@
   const currentCount = () => (!result.classList.contains('hidden') && lastPhotos) ? lastPhotos.length : shots;
 
   // Make the live preview the same shape as the photo windows of the selected frame / layout.
-  function applyPreviewAspect() {
+  function previewAspect() {
     const slots = (frameFor(shots).slots && frameFor(shots).slots[shots]) || LAYOUTS[shots];
-    $('stage').style.setProperty('--ar', (slots[0].w / slots[0].h).toFixed(4));
+    return slots[0].w / slots[0].h;
+  }
+  function applyPreviewAspect() {
+    $('stage').style.setProperty('--ar', previewAspect().toFixed(4));
   }
 
   function updateFrameUI() {
@@ -800,6 +817,11 @@
 
   frameBtn.addEventListener('click', openFrameModal);
   resultFrameBtn.addEventListener('click', openFrameModal);
+  $('resultFilterBtn').addEventListener('click', async () => {    // switch Color <-> B&W on the finished photos
+    if (!lastPhotos) return;
+    resultBW = !resultBW;
+    await renderResult();
+  });
   $('frameClose').addEventListener('click', closeFrameModal);
   frameModal.addEventListener('click', e => { if (e.target === frameModal) closeFrameModal(); });
 
