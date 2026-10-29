@@ -176,9 +176,8 @@
 
   /* ---------- Print instructions (side panel, stays visible behind the iPad print screen) ---------- */
   :root { --help-w: clamp(150px, 15vw, 200px); }
-  #result.helping { padding-right: calc(var(--help-w) + 24px); }   /* keeps the photo + buttons clear of the panel */
   #printHelp {
-    position: fixed; right: 10px; top: 50%; transform: translateY(-50%);
+    position: fixed; right: 10px; top: 50%; transform: translateY(-50%); z-index: 3;
     width: var(--help-w);
     background: var(--panel); border: 1px solid #34343c; border-radius: 16px;
     padding: 14px 12px 12px;
@@ -783,7 +782,6 @@
   $('printBtn').addEventListener('click', () => {
     if (!pdfFile) return;
     $('printHelp').classList.remove('hidden');     // instructions stay on the right side of the page
-    result.classList.add('helping');
     if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
       navigator.share({ files: [pdfFile], title: 'Photobooth print' }).catch(() => {});  // pick "Print"
     } else {
@@ -805,7 +803,6 @@
     flashEl.classList.remove('go');
     freezeEl.classList.add('hidden');
     $('printHelp').classList.add('hidden');
-    result.classList.remove('helping');
     result.classList.add('hidden');
     booth.classList.remove('hidden');
     dots().forEach(d => d.classList.remove('done'));
