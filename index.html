@@ -174,6 +174,34 @@
   .frameItem canvas { width: 90px; height: auto; border-radius: 3px; background: #000; display: block; }
   .frameItem.selected { border-color: var(--bulb); }
 
+  /* ---------- Print instructions ---------- */
+  #printModal {
+    position: fixed; inset: 0; z-index: 10;
+    background: rgba(0,0,0,.72);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  #printPanel {
+    background: var(--panel); border: 1px solid #34343c; border-radius: 24px;
+    padding: 28px 28px 24px; width: min(100%, 560px);
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  #printPanel h2 { margin: 0; font-size: 26px; font-weight: 800; }
+  #printSteps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; counter-reset: step; }
+  #printSteps li {
+    counter-increment: step; position: relative; padding-left: 52px; min-height: 36px;
+    font-size: 20px; line-height: 1.35; display: flex; align-items: center;
+  }
+  #printSteps li::before {
+    content: counter(step); position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--bulb); color: var(--bulb-ink); font-weight: 800; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #printSteps b { font-weight: 800; }
+  #printNote { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.4; }
+  #printActions { display: flex; gap: 12px; justify-content: flex-end; }
+
   /* ---------- Result ---------- */
   #result { height: 100%; width: 100%; display: flex; align-items: center; justify-content: center; gap: 32px; flex-wrap: wrap; }
   #resultImg {
@@ -243,6 +271,24 @@
       <button id="shareBtn" class="secondary">Save / Share</button>
       <a id="downloadLink" class="hidden" download="photobooth.jpg"></a>
       <button id="againBtn" class="secondary">Take New Photos</button>
+    </div>
+  </div>
+</div>
+
+<!-- Print instructions -->
+<div id="printModal" class="hidden" role="dialog" aria-modal="true" aria-label="How to print">
+  <div id="printPanel">
+    <h2>How to Print</h2>
+    <ol id="printSteps">
+      <li><span>Tap <b>Continue</b> below, then tap <b>Print</b> in the menu that appears.</span></li>
+      <li><span>Tap <b>Printer</b> and select <b>Canon SELPHY CP1500</b>.</span></li>
+      <li><span>Choose the <b>number of copies</b>. Each copy prints 2 strips.</span></li>
+      <li><span>Tap the <b>print icon</b> in the top right corner.</span></li>
+    </ol>
+    <p id="printNote">If a PDF opens instead of a menu, tap the Share icon and choose Print.</p>
+    <div id="printActions">
+      <button id="printCancel" class="secondary">Cancel</button>
+      <button id="printGo">Continue</button>
     </div>
   </div>
 </div>
@@ -747,7 +793,12 @@
   frameModal.addEventListener('click', e => { if (e.target === frameModal) closeFrameModal(); });
 
   // ---------- Result actions ----------
-  $('printBtn').addEventListener('click', () => {
+  const closePrintModal = () => $('printModal').classList.add('hidden');
+  $('printBtn').addEventListener('click', () => { if (pdfFile) $('printModal').classList.remove('hidden'); });
+  $('printCancel').addEventListener('click', closePrintModal);
+  $('printModal').addEventListener('click', e => { if (e.target === $('printModal')) closePrintModal(); });
+  $('printGo').addEventListener('click', () => {
+    closePrintModal();
     if (!pdfFile) return;
     if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
       navigator.share({ files: [pdfFile], title: 'Photobooth print' }).catch(() => {});  // pick "Print"
