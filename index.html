@@ -364,9 +364,9 @@
   // Characters that slide in from the page edges when a head is tapped (images live in icons/).
   // Each slides in, holds, then slides out; they stop short of the preview's outline by PEEK_GAP px.
   const PEEK_IN_S = 2, PEEK_HOLD_S = 2, PEEK_OUT_S = 2;   // seconds
-  const PEEK_GAP = 10;                                    // px between a character and the preview outline
+  const PEEK_GAP = 50;                                    // px between a character and the preview outline
   const PEEK_HEIGHT = 0.45;                               // character height as a fraction of the preview's height
-  const PEEK_ALIGN = 'bottom';                            // line up with the preview's 'bottom', 'center' or 'top'
+  const PEEK_ALIGN = 'center';                            // line up with the preview's 'center' (middle), 'bottom' or 'top'
   const PEEKS = {
     archie:     { left: 'icons/archie-left.png', right: 'icons/archie-right.png' },   // left head tapped
     silveryuki: { left: 'icons/yuki.png',        right: 'icons/silver.png'       },   // right head tapped
