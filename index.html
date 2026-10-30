@@ -53,6 +53,9 @@
   }
   #eggHead  { left: 0;  width: 10.2215%; background-size: 978.33% 100%; background-position: 0 0; }
   #eggHeadR { right: 0; width: 11.414%;  background-size: 876.12% 100%; background-position: 100% 0; }
+  /* characters that slide in beside the preview when a head is tapped */
+  #peekLayer { position: fixed; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
+  #peekLayer .peek { position: absolute; display: block; max-width: none; will-change: transform; -webkit-user-select: none; user-select: none; }
   @keyframes spinCW  { to { transform: rotate(360deg); } }
   @keyframes spinCCW { to { transform: rotate(-360deg); } }
   #eggHead.spin  { animation: spinCW  2s ease-in-out; }   /* left head: one clockwise turn in 2s */
@@ -242,6 +245,8 @@
 
 <header id="header"><div id="headerWrap"><img id="headerImg" src="icons/header.png" alt="Ian and Marissa’s Photo Booth"><div id="eggHead" class="egg"></div><div id="eggHeadR" class="egg"></div></div></header>
 
+<div id="peekLayer" aria-hidden="true"></div>
+
 <div id="app">
   <!-- Booth -->
   <div id="booth" style="display:contents">
@@ -356,6 +361,16 @@
 
   const BW_CONTRAST = 1.1;   // B&W filter contrast: 1 = none, 1.25 = 25% more
   document.documentElement.style.setProperty('--bw-contrast', BW_CONTRAST);   // the live preview uses the same value
+  // Characters that slide in from the page edges when a head is tapped (images live in icons/).
+  // Each slides in, holds, then slides out; they stop short of the preview's outline by PEEK_GAP px.
+  const PEEK_IN_S = 2, PEEK_HOLD_S = 2, PEEK_OUT_S = 2;   // seconds
+  const PEEK_GAP = 10;                                    // px between a character and the preview outline
+  const PEEK_HEIGHT = 0.45;                               // character height as a fraction of the preview's height
+  const PEEK_ALIGN = 'bottom';                            // line up with the preview's 'bottom', 'center' or 'top'
+  const PEEKS = {
+    archie:     { left: 'icons/archie-left.png', right: 'icons/archie-right.png' },   // left head tapped
+    silveryuki: { left: 'icons/yuki.png',        right: 'icons/silver.png'       },   // right head tapped
+  };
   const CAPTURE_W = 1080;   // stored photo width; its height follows the photo window's shape (same as the live preview)
 
   // ---------- Frames ----------
@@ -905,6 +920,47 @@
   $('frameClose').addEventListener('click', closeFrameModal);
   frameModal.addEventListener('click', e => { if (e.target === frameModal) closeFrameModal(); });
 
+  // ---------- Characters sliding in beside the preview ----------
+  let peeking = false;
+  const loadPeek = src => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+
+  async function playPeeks(id) {
+    const cfg = PEEKS[id];
+    if (!cfg || peeking) return;
+    peeking = true;
+    const layer = $('peekLayer'), vw = layer.clientWidth;
+    const onResult = !result.classList.contains('hidden');
+    // the area to stay clear of: the preview outline (camera page) or the strip + buttons (result page)
+    let L, R, T, B;
+    if (!onResult) { const r = $('stage').getBoundingClientRect(); L = r.left - 6; R = r.right + 6; T = r.top - 6; B = r.bottom + 6; }
+    else { const a = resultImg.getBoundingClientRect(), b = $('resultSide').getBoundingClientRect(); L = a.left; R = Math.max(a.right, b.right); T = a.top; B = a.bottom; }
+    const H = Math.round((B - T) * PEEK_HEIGHT);
+    const top = PEEK_ALIGN === 'top' ? T : PEEK_ALIGN === 'center' ? (T + B - H) / 2 : B - H;
+    const total = (PEEK_IN_S + PEEK_HOLD_S + PEEK_OUT_S) * 1000;
+    const kf = off => [
+      { transform: 'translateX(' + off + 'px)', offset: 0, easing: 'ease-out' },                       // slide in
+      { transform: 'translateX(0px)', offset: PEEK_IN_S * 1000 / total },                               // hold
+      { transform: 'translateX(0px)', offset: (PEEK_IN_S + PEEK_HOLD_S) * 1000 / total, easing: 'ease-in' },
+      { transform: 'translateX(' + off + 'px)', offset: 1 },                                            // slide out
+    ];
+    const runs = ['left', 'right'].map(async side => {
+      const im = await loadPeek(cfg[side]);
+      if (!im) return;                                          // image not in icons/: skip quietly
+      const w = Math.round(im.naturalWidth * H / im.naturalHeight);
+      im.className = 'peek';
+      im.style.cssText = 'height:' + H + 'px;width:' + w + 'px;top:' + top + 'px;';
+      let off;
+      if (side === 'left') { const restRight = L - PEEK_GAP; im.style.left = (restRight - w) + 'px'; off = -restRight; }   // wide images may run off the left edge
+      else { const restLeft = R + PEEK_GAP; im.style.left = restLeft + 'px'; off = vw - restLeft; }                       // ... or off the right edge
+      layer.appendChild(im);
+      const anim = im.animate(kf(off), { duration: total, fill: 'both' });
+      await new Promise(res => { anim.onfinish = res; });
+      im.remove();
+    });
+    await Promise.all(runs);
+    peeking = false;
+  }
+
   // ---------- Easter eggs: tap a head in the header to pick a hidden frame ----------
   // Left head = Archie, right head = Silver & Yuki. Works on the camera page (for the chosen 3 or 4
   // photos) and on the result page (for the photos just taken).
@@ -919,6 +975,7 @@
     updateFrameUI();
     if (onResult) renderResult();
     headEl.classList.add('spin');                                // the head does a 2-second spin
+    playPeeks(id);                                               // and the characters slide in beside the preview
   }
   $('eggHead').addEventListener('click', () => pickHiddenFrame('archie', $('eggHead')));
   $('eggHeadR').addEventListener('click', () => pickHiddenFrame('silveryuki', $('eggHeadR')));
@@ -1033,6 +1090,7 @@
   const savedCount = Number(store.get('photobooth-count'));
   setCount([3, 5, 10].includes(savedCount) ? savedCount : DEFAULT_COUNT);
   setMode(store.get('photobooth-mode') === 'bw' ? 'bw' : 'color');
+  Object.values(PEEKS).forEach(c => [c.left, c.right].forEach(src => { new Image().src = src; }));   // warm the cache
   startCamera();
   loadFrames().then(list => {
     frames = list;
