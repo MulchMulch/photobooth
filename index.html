@@ -44,10 +44,19 @@
   }
   #header[hidden] { display: none; }
   #headerWrap { position: relative; z-index: 1; width: min(100%, 680px); aspect-ratio: 1174 / 129; }
-  #headerImg { display: block; width: 100%; height: 100%; -webkit-touch-callout: none; }
-  .egg { position: absolute; top: 0; height: 100%; pointer-events: auto; cursor: pointer; }   /* invisible tap areas over the two heads */
-  #eggHead  { left: 0;  width: 10.2%; }
-  #eggHeadR { right: 0; width: 11.5%; }
+  /* The banner image has the text only; the two heads are drawn separately (below) so they can spin.
+     Source image is 1174 px wide: left head = columns 0-119, right head = columns 1040-1173. */
+  #headerImg { display: block; width: 100%; height: 100%; -webkit-touch-callout: none; clip-path: inset(0 11.414% 0 10.2215%); }
+  .egg {                                              /* a head: the same banner image, cropped to the head */
+    position: absolute; top: 0; height: 100%; pointer-events: auto; cursor: pointer;
+    background: url(icons/header.png) no-repeat;
+  }
+  #eggHead  { left: 0;  width: 10.2215%; background-size: 978.33% 100%; background-position: 0 0; }
+  #eggHeadR { right: 0; width: 11.414%;  background-size: 876.12% 100%; background-position: 100% 0; }
+  @keyframes spinCW  { to { transform: rotate(360deg); } }
+  @keyframes spinCCW { to { transform: rotate(-360deg); } }
+  #eggHead.spin  { animation: spinCW  2s ease-in-out; }   /* left head: one clockwise turn in 2s */
+  #eggHeadR.spin { animation: spinCCW 2s ease-in-out; }   /* right head: one counter-clockwise turn in 2s */
   #app {
     flex: 1 1 auto; min-height: 0; width: 100%;
     display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
@@ -345,7 +354,7 @@
     4: stack(4, 40,  60, 520, 347, 24),
   };
 
-  const BW_CONTRAST = 1.25;   // B&W filter contrast: 1 = none, 1.25 = 25% more
+  const BW_CONTRAST = 1.1;   // B&W filter contrast: 1 = none, 1.25 = 25% more
   document.documentElement.style.setProperty('--bw-contrast', BW_CONTRAST);   // the live preview uses the same value
   const CAPTURE_W = 1080;   // stored photo width; its height follows the photo window's shape (same as the live preview)
 
@@ -899,7 +908,7 @@
   // ---------- Easter eggs: tap a head in the header to pick a hidden frame ----------
   // Left head = Archie, right head = Silver & Yuki. Works on the camera page (for the chosen 3 or 4
   // photos) and on the result page (for the photos just taken).
-  function pickHiddenFrame(id) {
+  function pickHiddenFrame(id, headEl) {
     if (busy) return;
     const f = frames.find(x => x.id === id);
     if (!f) return;                                              // its files aren't in the frames/ folder
@@ -909,9 +918,11 @@
     selected = f;
     updateFrameUI();
     if (onResult) renderResult();
+    headEl.classList.add('spin');                                // the head does a 2-second spin
   }
-  $('eggHead').addEventListener('click', () => pickHiddenFrame('archie'));
-  $('eggHeadR').addEventListener('click', () => pickHiddenFrame('silveryuki'));
+  $('eggHead').addEventListener('click', () => pickHiddenFrame('archie', $('eggHead')));
+  $('eggHeadR').addEventListener('click', () => pickHiddenFrame('silveryuki', $('eggHeadR')));
+  document.querySelectorAll('.egg').forEach(h => h.addEventListener('animationend', () => h.classList.remove('spin')));
 
   // ---------- Result actions ----------
   $('printBtn').addEventListener('click', () => {
