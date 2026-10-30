@@ -228,6 +228,8 @@
     height: calc(min(calc(100dvh - 40px - var(--header-h)), 90vw * 1.48) * .9);   /* preview shown 10% smaller; the saved/printed image is unchanged */
     aspect-ratio: 100 / 148;
     border-radius: 4px; box-shadow: 0 10px 40px rgba(0,0,0,.6);
+    position: relative; z-index: 5;            /* above the header while it drops in */
+    transform-origin: 50% 100%;
     -webkit-user-select: auto; user-select: auto;
     -webkit-touch-callout: default;
   }
@@ -615,6 +617,7 @@
     if (cancelled()) return;
     booth.classList.add('hidden');
     result.classList.remove('hidden');
+    playPrintDrop();                               // strip is printed out and drops into the tray
     setBusy(false);
     startBtn.disabled = !stream;
   }
@@ -920,6 +923,38 @@
   $('frameClose').addEventListener('click', closeFrameModal);
   frameModal.addEventListener('click', e => { if (e.target === frameModal) closeFrameModal(); });
 
+  // ---------- Photo strip printing out and dropping into the tray ----------
+  let printAnim = null;
+  function playPrintDrop() {
+    if (printAnim) { printAnim.cancel(); printAnim = null; }
+    if (!resultImg.animate || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    const D = resultImg.offsetTop + resultImg.offsetHeight + 40;        // distance to get fully above the page
+    const eOut = 'cubic-bezier(.2,.7,.3,1)', eFall = 'cubic-bezier(.5,0,.9,.5)', eBounce = 'cubic-bezier(.2,.7,.4,1)';
+    // The strip is fed out of a slot at the top in jerky roller steps, then lets go and falls
+    // into the tray, landing with a tilt and two small bounces.
+    const pts = [];                                   // {t: ms, y: px, r: deg, e: easing to next point}
+    let t = 0;
+    const add = (y, r, e) => pts.push({ t, y, r, e });
+    const feed = [1, .86, .72, .57, .43, .31, .22].map(f => -D * f);
+    const pauses = [220, 260, 190, 240, 200, 230];
+    add(feed[0], 0, 'linear'); t = 250;               // a beat before printing starts
+    for (let i = 0; i < 6; i++) {
+      add(feed[i], 0, eOut); t += 140;                // roller grabs and pushes
+      add(feed[i + 1], 0, 'linear'); t += pauses[i];  // ...then pauses
+    }
+    add(feed[6], 0, eFall); t += 340;                 // let go: gravity pulls it down
+    add(0, -2.2, eBounce); t += 120;                  // lands, tilting
+    add(-16, 1.2, eFall); t += 110;                   // first bounce
+    add(0, -.7, eBounce); t += 90;
+    add(-5, .3, eFall); t += 80;                      // second, smaller bounce
+    add(0, 0, 'linear');
+    const T = t;
+    const keyframes = pts.map(p => ({
+      transform: 'translateY(' + p.y.toFixed(1) + 'px) rotate(' + p.r + 'deg)', offset: p.t / T, easing: p.e }));
+    printAnim = resultImg.animate(keyframes, { duration: T, fill: 'backwards' });   // ends exactly at its normal place
+    printAnim.onfinish = () => { printAnim = null; };
+  }
+
   // ---------- Characters sliding in beside the preview ----------
   let peeking = false;
   const loadPeek = src => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
@@ -933,7 +968,7 @@
     // the area to stay clear of: the preview outline (camera page) or the strip + buttons (result page)
     let L, R, T, B;
     if (!onResult) { const r = $('stage').getBoundingClientRect(); L = r.left - 6; R = r.right + 6; T = r.top - 6; B = r.bottom + 6; }
-    else { const a = resultImg.getBoundingClientRect(), b = $('resultSide').getBoundingClientRect(); L = a.left; R = Math.max(a.right, b.right); T = a.top; B = a.bottom; }
+    else { const b = $('resultSide').getBoundingClientRect(); L = resultImg.offsetLeft; R = Math.max(resultImg.offsetLeft + resultImg.offsetWidth, b.right); T = resultImg.offsetTop; B = T + resultImg.offsetHeight; }
     const H = Math.round((B - T) * PEEK_HEIGHT);
     const top = PEEK_ALIGN === 'top' ? T : PEEK_ALIGN === 'center' ? (T + B - H) / 2 : B - H;
     const total = (PEEK_IN_S + PEEK_HOLD_S + PEEK_OUT_S) * 1000;
@@ -1003,6 +1038,7 @@
   });
 
   $('againBtn').addEventListener('click', () => {
+    if (printAnim) { printAnim.cancel(); printAnim = null; }
     flashEl.classList.remove('go');
     freezeEl.classList.add('hidden');
     $('printHelp').classList.add('hidden');
@@ -1042,7 +1078,7 @@
     if (headerEl.hidden) return;
     const onBooth = !booth.classList.contains('hidden');
     if (onBooth) { headerImg.style.transform = ''; return; }   // camera screen: plain even spacing from the layout itself
-    const ref = (onBooth ? $('stage') : resultImg).getBoundingClientRect();
+    const ref = onBooth ? $('stage').getBoundingClientRect() : { top: resultImg.offsetTop, height: resultImg.offsetHeight };   // offsets ignore the drop animation
     if (!ref.height) return;
     const frameTop = ref.top - (onBooth ? 6 : 0);                  // 6px = the white outline around the preview
     const h = headerImg.offsetHeight;
