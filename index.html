@@ -43,7 +43,11 @@
     pointer-events: none;
   }
   #header[hidden] { display: none; }
-  #headerImg { position: relative; z-index: 1; display: block; width: min(100%, 680px); aspect-ratio: 1174 / 129; height: auto; }
+  #headerWrap { position: relative; z-index: 1; width: min(100%, 680px); aspect-ratio: 1174 / 129; }
+  #headerImg { display: block; width: 100%; height: 100%; -webkit-touch-callout: none; }
+  .egg { position: absolute; top: 0; height: 100%; pointer-events: auto; cursor: pointer; }   /* invisible tap areas over the two heads */
+  #eggHead  { left: 0;  width: 10.2%; }
+  #eggHeadR { right: 0; width: 11.5%; }
   #app {
     flex: 1 1 auto; min-height: 0; width: 100%;
     display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
@@ -169,6 +173,7 @@
     padding: 22px 22px 20px; max-width: 100%; display: flex; flex-direction: column; gap: 16px; align-items: center;
   }
   #framePanel h2 { margin: 0; font-size: 22px; font-weight: 800; }
+  #frameNote { margin: -8px 0 0; font-size: 14px; font-weight: 500; text-align: center; }
   #frameList {
     display: flex; gap: 14px; overflow-x: auto; max-width: calc(100vw - 80px);
     padding: 6px; -webkit-overflow-scrolling: touch; touch-action: pan-x; overscroll-behavior: contain;
@@ -179,6 +184,7 @@
     display: flex; flex-direction: column; align-items: center; gap: 8px;
   }
   .frameItem canvas { width: 90px; height: auto; border-radius: 3px; background: #141414; display: block; }
+  .frameItem canvas.edge { box-shadow: 0 0 0 1px #F2F0EF; }   /* 1px off-white outline on the black frame's thumbnail only */
   .frameItem.selected { border-color: var(--bulb); }
 
   /* ---------- Print instructions (side panel, stays visible behind the iPad print screen) ---------- */
@@ -225,7 +231,7 @@
 </head>
 <body>
 
-<header id="header"><img id="headerImg" src="icons/header.png" alt="Ian and Marissa’s Photo Booth"></header>
+<header id="header"><div id="headerWrap"><img id="headerImg" src="icons/header.png" alt="Ian and Marissa’s Photo Booth"><div id="eggHead" class="egg"></div><div id="eggHeadR" class="egg"></div></div></header>
 
 <div id="app">
   <!-- Booth -->
@@ -300,6 +306,7 @@
 <div id="frameModal" class="hidden" role="dialog" aria-modal="true" aria-label="Choose a frame">
   <div id="framePanel">
     <h2>Choose a frame</h2>
+    <p id="frameNote">(you can change frames after photos are taken)</p>
     <div id="frameList"></div>
     <button id="frameClose" class="secondary">Close</button>
   </div>
@@ -358,6 +365,9 @@
     { id: 'white',  name: 'Classic White', bg: '#F2F0EF', fg: '#141414', guide: '#d8d5d3' },   // built in, no file needed
     { id: 'pixel',   name: 'Halloween Pixel', files: { 3: 'frames/pixel-3.png', 4:'frames/pixel-4.png'}},
     { id: 'web', name: 'Halloween Web', files: { 3: 'frames/web-3.png', 4:'frames/web-4.png'}},
+    // Hidden frames (secret: true): not in the frame chooser; picked by tapping a head in the header.
+    { id: 'archie',     name: 'Archie',        secret: true, files: { 3: 'frames/archie-3.png',     4: 'frames/archie-4.png'     } },   // left head
+    { id: 'silveryuki', name: 'Silver & Yuki', secret: true, files: { 3: 'frames/silveryuki-3.png', 4: 'frames/silveryuki-4.png' } },   // right head
     // { id: 'party', name: 'Party', files: { 3: 'frames/party-3.png', 4: 'frames/party-4.png' } },
   ];
 
@@ -600,6 +610,7 @@
   // ---------- Photos-per-strip toggle ----------
   function setShots(n) {
     shots = n;
+    if (selected && selected.secret && !(selected.art && selected.art[n])) selected = frames[0];   // a hidden frame with no version for this photo count: back to Classic Black
     store.set('photobooth-shots', String(n));
     segBtns.forEach(b => b.classList.toggle('on', Number(b.dataset.n) === n));
     updateFrameUI();
@@ -636,6 +647,7 @@
 
   // Frames that can be used with a given photo count.
   const availableFrames = n => frames.filter(f => !f.files || (f.art && f.art[n]));
+  const listedFrames = n => availableFrames(n).filter(f => !f.secret);   // what the frame chooser shows (secret frames are left out)
   // The selected frame, or the built-in black one if it has no art for this layout.
   const frameFor = n => availableFrames(n).includes(selected) ? selected : frames[0];
 
@@ -833,29 +845,32 @@
 
   function updateFrameUI() {
     applyPreviewAspect();
-    const multi = availableFrames(shots).length > 1;
+    const multi = listedFrames(shots).length > 1;
     frameBtn.classList.toggle('hidden', !multi);
     frameBtn.textContent = '';
     const lab = document.createElement('b'); lab.textContent = 'Frame:';
     frameBtn.append(lab, ' ' + frameFor(shots).name);
     const rc = lastPhotos ? lastPhotos.length : shots;
-    resultFrameBtn.classList.toggle('hidden', availableFrames(rc).length < 2);
+    resultFrameBtn.classList.toggle('hidden', listedFrames(rc).length < 2);
   }
 
   function openFrameModal() {
     const n = currentCount();
     const active = frameFor(n);
     frameList.innerHTML = '';
-    availableFrames(n).forEach(f => {
+    listedFrames(n).forEach(f => {
       const b = document.createElement('button');
       b.className = 'frameItem' + (f === active ? ' selected' : '');
-      b.appendChild(makeThumb(f, n));
+      const thumb = makeThumb(f, n);
+      if (f.id === 'black') thumb.classList.add('edge');   // picker preview only; the real frame is unchanged
+      b.appendChild(thumb);
       const label = document.createElement('span');
       label.textContent = f.name;
       b.appendChild(label);
       b.addEventListener('click', () => chooseFrame(f));
       frameList.appendChild(b);
     });
+    $('frameNote').classList.toggle('hidden', !result.classList.contains('hidden'));   // the hint only makes sense before the photos are taken
     frameModal.classList.remove('hidden');
   }
   const closeFrameModal = () => frameModal.classList.add('hidden');
@@ -877,6 +892,23 @@
   });
   $('frameClose').addEventListener('click', closeFrameModal);
   frameModal.addEventListener('click', e => { if (e.target === frameModal) closeFrameModal(); });
+
+  // ---------- Easter eggs: tap a head in the header to pick a hidden frame ----------
+  // Left head = Archie, right head = Silver & Yuki. Works on the camera page (for the chosen 3 or 4
+  // photos) and on the result page (for the photos just taken).
+  function pickHiddenFrame(id) {
+    if (busy) return;
+    const f = frames.find(x => x.id === id);
+    if (!f) return;                                              // its files aren't in the frames/ folder
+    const onResult = !result.classList.contains('hidden');
+    const n = onResult ? (lastPhotos ? lastPhotos.length : 0) : shots;
+    if (!(f.art && f.art[n])) return;                            // no version for this photo count
+    selected = f;
+    updateFrameUI();
+    if (onResult) renderResult();
+  }
+  $('eggHead').addEventListener('click', () => pickHiddenFrame('archie'));
+  $('eggHeadR').addEventListener('click', () => pickHiddenFrame('silveryuki'));
 
   // ---------- Result actions ----------
   $('printBtn').addEventListener('click', () => {
@@ -934,7 +966,7 @@
 
   // On the result screen, centre the header vertically between the top of the page and the top of
   // the finished strip. (The camera screen uses the even spacing built into the layout.)
-  const headerImg = $('headerImg');
+  const headerImg = $('headerWrap');            // the wrapper moves, so the tap area moves with the image
   function placeHeader() {
     if (headerEl.hidden) return;
     const onBooth = !booth.classList.contains('hidden');
@@ -990,7 +1022,7 @@
   startCamera();
   loadFrames().then(list => {
     frames = list;
-    selected = frames.find(f => f.id === store.get('photobooth-frame')) || frames[0];
+    selected = frames.find(f => f.id === store.get('photobooth-frame') && !f.secret) || frames[0];
     updateFrameUI();
     sizeFrameBtn();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeFrameBtn);   // re-measure once the web font is in
