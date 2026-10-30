@@ -387,10 +387,10 @@
   //   slots:   { 3: [{x,y,w,h},…3], 4: [{x,y,w,h},…4] } – your own photo windows
   // A file that can't be loaded is skipped automatically.
   // Plain-colour frames need no files: give an entry bg (the colour), and optionally fg (caption text
-  // colour) and guide (the faint cut line between the two strips), like Classic Black / Classic White.
+  // colour), like Classic Black / Classic White.
   const FRAME_CONFIG = [
-    { id: 'black',  name: 'Classic Black', bg: '#141414', fg: '#F2F0EF', guide: '#2a2a2a' },   // built in, no file needed
-    { id: 'white',  name: 'Classic White', bg: '#F2F0EF', fg: '#141414', guide: '#d8d5d3' },   // built in, no file needed
+    { id: 'black',  name: 'Classic Black', bg: '#141414', fg: '#F2F0EF' },   // built in, no file needed
+    { id: 'white',  name: 'Classic White', bg: '#F2F0EF', fg: '#141414' },   // built in, no file needed
     { id: 'pixel',   name: 'Halloween Pixel', files: { 3: 'frames/pixel-3.png', 4:'frames/pixel-4.png'}},
     { id: 'web', name: 'Halloween Web', files: { 3: 'frames/web-3.png', 4:'frames/web-4.png'}},
     // Hidden frames (secret: true): not in the frame chooser; picked by tapping a head in the header.
@@ -710,8 +710,6 @@
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     drawStrip(ctx, 0, photos, frame, photos.length);
     drawStrip(ctx, STRIP_W, photos, frame, photos.length);
-    ctx.fillStyle = frame.guide || '#2a2a2a';       // faint cut guide
-    ctx.fillRect(STRIP_W - 1, 0, 2, SHEET_H);
     return sheet;
   }
 
