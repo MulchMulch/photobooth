@@ -361,7 +361,7 @@
     4: stack(4, 40,  60, 520, 347, 24),
   };
 
-  const BW_CONTRAST = 1.1;   // B&W filter contrast: 1 = none, 1.25 = 25% more
+  const BW_CONTRAST = 1.1;    // B&W filter contrast: 1 = none, 1.1 = 10% more
   document.documentElement.style.setProperty('--bw-contrast', BW_CONTRAST);   // the live preview uses the same value
   // Characters that slide in from the page edges when a head is tapped (images live in icons/).
   // Each slides in, holds, then slides out; they stop short of the preview's outline by PEEK_GAP px.
@@ -935,14 +935,14 @@
     const pts = [];                                   // {t: ms, y: px, r: deg, e: easing to next point}
     let t = 0;
     const add = (y, r, e) => pts.push({ t, y, r, e });
-    const feed = [1, .86, .72, .57, .43, .31, .22].map(f => -D * f);
-    const pauses = [220, 260, 190, 240, 200, 230];
+    const feed = [1, .74, .48, .22].map(f => -D * f);   // 3 roller steps covering the same distance
+    const pauses = [220, 260, 190];
     add(feed[0], 0, 'linear'); t = 250;               // a beat before printing starts
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 3; i++) {
       add(feed[i], 0, eOut); t += 140;                // roller grabs and pushes
       add(feed[i + 1], 0, 'linear'); t += pauses[i];  // ...then pauses
     }
-    add(feed[6], 0, eFall); t += 340;                 // let go: gravity pulls it down
+    add(feed[3], 0, eFall); t += 340;                 // let go: gravity pulls it down
     add(0, -2.2, eBounce); t += 120;                  // lands, tilting
     add(-16, 1.2, eFall); t += 110;                   // first bounce
     add(0, -.7, eBounce); t += 90;
