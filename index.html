@@ -182,14 +182,25 @@
   }
   #framePanel {
     background: var(--panel); border: 1px solid #34343c; border-radius: 24px;
-    padding: 22px 22px 20px; max-width: 100%; display: flex; flex-direction: column; gap: 16px; align-items: center;
+    position: relative; padding: 22px 22px 20px; max-width: 100%; display: flex; flex-direction: column; gap: 16px; align-items: center;
   }
+  #framePanel.expanded { width: min(94vw, 720px); }
   #framePanel h2 { margin: 0; font-size: 22px; font-weight: 800; }
+  #frameX {                                              /* round X in the top-right corner */
+    position: absolute; top: 12px; right: 12px; width: 38px; height: 38px; padding: 0; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; line-height: 0;
+  }
+  #frameX svg { width: 16px; height: 16px; }
   #frameNote { margin: -8px 0 0; font-size: 14px; font-weight: 500; text-align: center; }
   #frameList {
     display: flex; gap: 14px; overflow-x: auto; max-width: calc(100vw - 80px);
     padding: 6px; -webkit-overflow-scrolling: touch; touch-action: pan-x; overscroll-behavior: contain;
   }
+  #framePanel.expanded #frameList {                      /* all frames: wrap into rows, scroll up/down if needed */
+    flex-wrap: wrap; justify-content: center; overflow-x: hidden; overflow-y: auto;
+    max-width: 100%; max-height: min(70dvh, 640px); touch-action: pan-y;
+  }
+  #framePanel.expanded .frameItem canvas { width: 72px; }   /* slightly smaller previews so more fit without scrolling */
   .frameItem {
     flex: 0 0 auto; background: transparent; color: var(--text); font-weight: 500; font-size: 15px;
     padding: 8px; border-radius: 14px; border: 3px solid transparent;
@@ -321,10 +332,11 @@
 <!-- Frame chooser -->
 <div id="frameModal" class="hidden" role="dialog" aria-modal="true" aria-label="Choose a frame">
   <div id="framePanel">
+    <button id="frameX" class="secondary" aria-label="Close"><svg viewBox="0 0 16 16" fill="none" stroke="#141414" stroke-width="2.4" stroke-linecap="round"><path d="M3 3l10 10M13 3L3 13"/></svg></button>
     <h2>Choose a frame</h2>
     <p id="frameNote">(you can change frames after photos are taken)</p>
     <div id="frameList"></div>
-    <button id="frameClose" class="secondary">Close</button>
+    <button id="frameMore" class="secondary">Show more</button>
   </div>
 </div>
 
@@ -388,9 +400,14 @@
   // A file that can't be loaded is skipped automatically.
   // Plain-colour frames need no files: give an entry bg (the colour), and optionally fg (caption text
   // colour), like Classic Black / Classic White.
+  // The frame chooser first shows only Classic Black, Classic White and these featured frames (by id).
+  // "Show more" then reveals every non-secret frame in FRAME_CONFIG, in the order listed there.
+  const FEATURED_FRAMES = ['pitbull', 'thanksgiving'];
   const FRAME_CONFIG = [
     { id: 'black',  name: 'Classic Black', bg: '#141414', fg: '#F2F0EF' },   // built in, no file needed
     { id: 'white',  name: 'Classic White', bg: '#F2F0EF', fg: '#141414' },   // built in, no file needed
+    { id: 'pitbull',       name: 'Pitbull',       files: { 3: 'frames/pitbull-3.png',       4: 'frames/pitbull-4.png'       } },
+    { id: 'thanksgiving',  name: 'Thanksgiving',  files: { 3: 'frames/thanksgiving-3.png',  4: 'frames/thanksgiving-4.png'  } },
     { id: 'pixel',   name: 'Halloween Pixel', files: { 3: 'frames/pixel-3.png', 4:'frames/pixel-4.png'}},
     { id: 'web', name: 'Halloween Web', files: { 3: 'frames/web-3.png', 4:'frames/web-4.png'}},
     // Hidden frames (secret: true): not in the frame chooser; picked by tapping a head in the header.
@@ -882,11 +899,16 @@
     resultFrameBtn.classList.toggle('hidden', listedFrames(rc).length < 2);
   }
 
-  function openFrameModal() {
+  let framesExpanded = false;
+
+  function renderFrameList() {
     const n = currentCount();
     const active = frameFor(n);
+    const all = listedFrames(n);                                              // every non-secret frame for this layout
+    const first = ['black', 'white', ...FEATURED_FRAMES].map(id => all.find(f => f.id === id)).filter(Boolean);
+    const list = framesExpanded ? all : first;
     frameList.innerHTML = '';
-    listedFrames(n).forEach(f => {
+    list.forEach(f => {
       const b = document.createElement('button');
       b.className = 'frameItem' + (f === active ? ' selected' : '');
       const thumb = makeThumb(f, n);
@@ -898,6 +920,13 @@
       b.addEventListener('click', () => chooseFrame(f));
       frameList.appendChild(b);
     });
+    $('framePanel').classList.toggle('expanded', framesExpanded);
+    $('frameMore').classList.toggle('hidden', framesExpanded || all.length <= first.length);   // nothing more to show
+  }
+
+  function openFrameModal() {
+    framesExpanded = false;                                                   // always opens on the short list
+    renderFrameList();
     $('frameNote').classList.toggle('hidden', !result.classList.contains('hidden'));   // the hint only makes sense before the photos are taken
     frameModal.classList.remove('hidden');
   }
@@ -918,7 +947,8 @@
     resultBW = !resultBW;
     await renderResult();
   });
-  $('frameClose').addEventListener('click', closeFrameModal);
+  $('frameX').addEventListener('click', closeFrameModal);
+  $('frameMore').addEventListener('click', () => { framesExpanded = true; renderFrameList(); });
   frameModal.addEventListener('click', e => { if (e.target === frameModal) closeFrameModal(); });
 
   // ---------- Photo strip printing out and dropping into the tray ----------
