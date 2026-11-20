@@ -182,25 +182,30 @@
   }
   #framePanel {
     background: var(--panel); border: 1px solid #34343c; border-radius: 24px;
-    position: relative; padding: 22px 22px 20px; max-width: 100%; display: flex; flex-direction: column; gap: 16px; align-items: center;
+    --fscale: 1.25;                                    /* the whole window and everything in it is drawn at 125% */
+    transform: scale(var(--fscale)); transform-origin: 50% 50%;
+    position: relative; padding: 22px 22px 20px; max-width: calc((100vw - 40px) / var(--fscale)); display: flex; flex-direction: column; gap: 16px; align-items: center;
   }
-  #framePanel.expanded { width: min(94vw, 720px); }
+  #framePanel.expanded { width: min(calc(94vw / var(--fscale)), 720px); }
   #framePanel h2 { margin: 0; font-size: 22px; font-weight: 800; }
   #frameX {                                              /* round X in the top-right corner */
-    position: absolute; top: 12px; right: 12px; width: 38px; height: 38px; padding: 0; border-radius: 50%;
+    position: absolute; top: -12px; right: -12px; width: 38px; height: 38px; padding: 0; border-radius: 50%;   /* centred on the window's rounded top-right corner */
     display: flex; align-items: center; justify-content: center; line-height: 0;
   }
   #frameX svg { width: 16px; height: 16px; }
   #frameNote { margin: -8px 0 0; font-size: 14px; font-weight: 500; text-align: center; }
   #frameList {
-    display: flex; gap: 14px; overflow-x: auto; max-width: calc(100vw - 80px);
+    display: flex; gap: 14px; overflow-x: auto; max-width: calc((100vw - 80px) / var(--fscale));
     padding: 6px; -webkit-overflow-scrolling: touch; touch-action: pan-x; overscroll-behavior: contain;
   }
   #framePanel.expanded #frameList {                      /* all frames: wrap into rows, scroll up/down if needed */
     flex-wrap: wrap; justify-content: center; overflow-x: hidden; overflow-y: auto;
-    max-width: 100%; max-height: min(70dvh, 640px); touch-action: pan-y;
+    max-width: 100%; max-height: min(calc((100dvh - 40px) / var(--fscale) - 110px), 640px); touch-action: pan-y;
   }
   #framePanel.expanded .frameItem canvas { width: 72px; }   /* slightly smaller previews so more fit without scrolling */
+  #framePanel.expanded #frameList { gap: 10px; }
+  #framePanel.expanded .frameItem { width: 96px; padding: 8px 4px; }   /* fixed width so six fit in one row; long names wrap */
+  #framePanel.expanded .frameItem span { text-align: center; line-height: 1.2; font-size: 14px; }
   .frameItem {
     flex: 0 0 auto; background: transparent; color: var(--text); font-weight: 500; font-size: 15px;
     padding: 8px; border-radius: 14px; border: 3px solid transparent;
@@ -406,7 +411,7 @@
   const FRAME_CONFIG = [
     { id: 'black',  name: 'Classic Black', bg: '#141414', fg: '#F2F0EF' },   // built in, no file needed
     { id: 'white',  name: 'Classic White', bg: '#F2F0EF', fg: '#141414' },   // built in, no file needed
-    { id: 'pitbull',       name: 'Pitbull',       files: { 3: 'frames/pitbull-3.png',       4: 'frames/pitbull-4.png'       } },
+    { id: 'pitbull',       name: 'Pitbullsgiving', files: { 3: 'frames/pitbull-3.png',       4: 'frames/pitbull-4.png'       } },
     { id: 'thanksgiving',  name: 'Thanksgiving',  files: { 3: 'frames/thanksgiving-3.png',  4: 'frames/thanksgiving-4.png'  } },
     { id: 'pixel',   name: 'Halloween Pixel', files: { 3: 'frames/pixel-3.png', 4:'frames/pixel-4.png'}},
     { id: 'web', name: 'Halloween Web', files: { 3: 'frames/web-3.png', 4:'frames/web-4.png'}},
