@@ -358,12 +358,12 @@
   //   '4x6'    = true 4 x 6 in, 101.6 x 152.4 mm (most other photo printers)
   const PRINT_PAPER = 'selphy';
 
-  // The SELPHY stretches/zooms borderless prints a little, which crops the edges of the picture.
-  // So the print PDF shrinks the sheet to this percentage of the page, centred on white, and the
-  // printer's overscan trims white margin instead of the strips. 100 = off. Lower it if edges are
-  // still cut off; raise it if too much white shows around the print. (Print only: the on-screen
-  // preview and the Save / Share strip are not shrunk.)
-  const PRINT_SCALE = 96;
+  // Black border drawn around the whole print image (the PDF only; the on-screen sheet and the
+  // Save / Share strip don't get it). The picture is scaled down evenly to make room, so its shape
+  // doesn't change and the printer's overscan trims black border instead of the strips.
+  // PRINT_BORDER is the border's thickness in percent of the page, per side (0 = off).
+  const PRINT_BORDER = 1;
+  const PRINT_BORDER_COLOR = '#000000';
   // w/h = paper size in mm (sets the sheet's shape); pw/ph = the PDF page in whole points (1/72 in), so
   // viewers have no fractional pixel to round up and leave a thin blank row. 283 x 420 pt is iOS's "Postcard".
   const PAPERS = {
@@ -810,15 +810,15 @@
   }
 
   // ---------- Print PDF ----------
-  // One-page PDF whose page is exactly the chosen paper size, with the sheet shrunk onto white by
-  // PRINT_SCALE (100 = fills the page edge to edge). iOS prints PDFs at their true
-  // page size, with no URL/date footer.
+  // One-page PDF whose page is exactly the chosen paper size, with the sheet inside a PRINT_BORDER% border
+  // (the rest of the page is filled with the border colour). iOS prints PDFs at their true page size,
+  // with no URL/date footer.
   async function makePdf(jpegBlob) {
     const jpg = new Uint8Array(await jpegBlob.arrayBuffer());
     const pw = PAPER.pw, ph = PAPER.ph;                                  // page size in whole points
-    const sc = Math.max(pw / SHEET_W, ph / SHEET_H);                     // "cover": fills the page; under 0.3% is trimmed off the sides
-    const shrink = Math.min(PRINT_SCALE, 100) / 100;                     // shrink onto a white page (see PRINT_SCALE)
-    const iw = SHEET_W * sc * shrink, ih = SHEET_H * sc * shrink;
+    const edge = PRINT_BORDER / 100;                                     // border thickness as a fraction of the page, per side
+    const sc = Math.min(pw * (1 - 2 * edge) / SHEET_W, ph * (1 - 2 * edge) / SHEET_H);   // fit inside the border, same shape, nothing trimmed
+    const iw = SHEET_W * sc, ih = SHEET_H * sc;
     const ix = (pw - iw) / 2, iy = (ph - ih) / 2;                        // centred
     const f = n => n.toFixed(3);
     const enc = new TextEncoder();
@@ -836,7 +836,8 @@
          ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpg.length + ' >>\nstream\n');
     push(jpg);
     push('\nendstream\nendobj\n');
-    const content = 'q 1 1 1 rg 0 0 ' + f(pw) + ' ' + f(ph) + ' re f Q\n' +                          // white page
+    const bc = [1, 3, 5].map(i => (parseInt(PRINT_BORDER_COLOR.slice(i, i + 2), 16) / 255).toFixed(3)).join(' ');
+    const content = 'q ' + bc + ' rg 0 0 ' + f(pw) + ' ' + f(ph) + ' re f Q\n' +                      // border colour fills the page
                     'q ' + f(iw) + ' 0 0 ' + f(ih) + ' ' + f(ix) + ' ' + f(iy) + ' cm /Im0 Do Q';
     obj(5, '<< /Length ' + content.length + ' >>\nstream\n' + content + '\nendstream');
 
