@@ -357,7 +357,12 @@
   //   'selphy' = Canon SELPHY postcard paper, 100 x 148 mm (iOS lists it as "Postcard")
   //   '4x6'    = true 4 x 6 in, 101.6 x 152.4 mm (most other photo printers)
   const PRINT_PAPER = 'selphy';
-  const PAPERS = { selphy: { w: 100, h: 148 }, '4x6': { w: 101.6, h: 152.4 } };
+  // w/h = paper size in mm (sets the sheet's shape); pw/ph = the PDF page in whole points (1/72 in), so
+  // viewers have no fractional pixel to round up and leave a thin blank row. 283 x 420 pt is iOS's "Postcard".
+  const PAPERS = {
+    selphy: { w: 100,   h: 148,   pw: 283, ph: 420 },
+    '4x6':  { w: 101.6, h: 152.4, pw: 288, ph: 432 },
+  };
 
   // ---------- Sheet + strip geometry ----------
   // The sheet holds two identical strips side by side. Each strip is half the paper wide and
@@ -803,8 +808,8 @@
   // page size, with no URL/date footer.
   async function makePdf(jpegBlob) {
     const jpg = new Uint8Array(await jpegBlob.arrayBuffer());
-    const pw = PAPER.w / 25.4 * 72, ph = PAPER.h / 25.4 * 72;          // page size in points
-    const sc = Math.max(pw / SHEET_W, ph / SHEET_H);                     // "cover" scale
+    const pw = PAPER.pw, ph = PAPER.ph;                                  // page size in whole points
+    const sc = Math.max(pw / SHEET_W, ph / SHEET_H);                     // "cover": fills the page; under 0.3% is trimmed off the sides
     const iw = SHEET_W * sc, ih = SHEET_H * sc;
     const ix = (pw - iw) / 2, iy = (ph - ih) / 2;
     const f = n => n.toFixed(3);
